@@ -1,0 +1,10 @@
+{
+	"id": "obsidian-viewpoint",
+	"name": "Obsidian Viewpoint Plugin",
+	"description": "N-dimensional worldbuilding graph editor",
+	"author": "Ixniyevonn",
+	"authorUrl": "",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"isDesktopOnly": false
+}
