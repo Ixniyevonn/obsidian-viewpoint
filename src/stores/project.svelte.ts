@@ -171,6 +171,17 @@ export function createProjectStore() {
             return project;
         },
 
+        renameGroup(dimensionId: string, groupId: string, name: string) {
+            merge();
+            const dim = project.dimensions[dimensionId];
+            if (dim) {
+                const group = dim.groups.find((g) => g.id === groupId);
+                if (group) group.name = name;
+            }
+            touch(); notify();
+            return project;
+        },
+
         removeGroup(dimensionId: string, groupId: string) {
             snap();
             const dim = project.dimensions[dimensionId];

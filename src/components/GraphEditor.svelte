@@ -72,7 +72,6 @@
     const wx = ui.dragGhostX;
     const wy = ui.dragGhostY;
 
-    // Hit-test against layout groups to find drop target
     let targetGroupId: string | null = null;
     for (const [groupId, g] of Object.entries(layout.groups)) {
       if (groupId === "__ungrouped") continue;
@@ -94,13 +93,35 @@
     ui.endDrag();
   }
 
+  // --- Rename handler for groups (including __ungrouped) ---
+
+  function handleGroupRename(groupId: string, newName: string) {
+    const dimId = ui.activeDimensionId;
+    if (!dimId) return;
+
+    if (groupId === "__ungrouped") {
+      // Create a real group with this name and move all ungrouped nodes into it
+      const newGroupId = generateId("grp");
+      project.addGroup(dimId, newGroupId, newName);
+
+      const notes = project.project.notes;
+      for (const noteId of Object.keys(notes)) {
+        const membership = notes[noteId].membership[dimId];
+        if (membership === null || membership === undefined) {
+          project.setNoteMembership(noteId, dimId, newGroupId);
+        }
+      }
+    } else {
+      project.renameGroup(dimId, groupId, newName);
+    }
+  }
+
   // --- Keyboard shortcuts ---
 
   function handleKeydown(e: KeyboardEvent) {
     const tag = (e.target as HTMLElement)?.tagName;
     const inInput = tag === "INPUT" || tag === "TEXTAREA";
 
-    // Undo/redo works even from inputs
     if (e.key === "z" && (e.ctrlKey || e.metaKey) && !e.altKey) {
       if (e.shiftKey) {
         e.preventDefault();
@@ -286,6 +307,9 @@
           height={g.height}
           name={g.name}
           highlight={dropTargetGroupId === groupId}
+          onRename={ui.activeDimensionId
+            ? (newName) => handleGroupRename(groupId, newName)
+            : undefined}
         />
       {/each}
 
@@ -308,7 +332,6 @@
         />
       {/each}
 
-      <!-- Drag ghost -->
       {#if dragGhost}
         <div
           class="drag-ghost"

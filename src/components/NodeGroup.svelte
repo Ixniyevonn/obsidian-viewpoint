@@ -8,9 +8,55 @@
     height: number;
     name: string;
     highlight?: boolean;
+    onRename?: (newName: string) => void;
   }
 
-  const { x, y, width, height, name, highlight = false }: Props = $props();
+  const {
+    x,
+    y,
+    width,
+    height,
+    name,
+    highlight = false,
+    onRename,
+  }: Props = $props();
+
+  let isEditing = $state(false);
+  let editValue = $state("");
+  let inputEl: HTMLInputElement | undefined = $state();
+
+  function startEdit(e: MouseEvent) {
+    if (!onRename) return;
+    e.stopPropagation();
+    isEditing = true;
+    editValue = name;
+    requestAnimationFrame(() => {
+      inputEl?.focus();
+      inputEl?.select();
+    });
+  }
+
+  function commit() {
+    const trimmed = editValue.trim();
+    if (trimmed && trimmed !== name) {
+      onRename?.(trimmed);
+    }
+    isEditing = false;
+  }
+
+  function cancel() {
+    isEditing = false;
+  }
+
+  function onKeydown(e: KeyboardEvent) {
+    e.stopPropagation();
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commit();
+    } else if (e.key === "Escape") {
+      cancel();
+    }
+  }
 </script>
 
 <Node
@@ -20,7 +66,20 @@
   {y}
   cssClass="node-group{highlight ? ' group-drop-target' : ''}"
 >
-  <div class="group-label">{name}</div>
+  {#if isEditing}
+    <input
+      bind:this={inputEl}
+      bind:value={editValue}
+      class="group-label-edit"
+      onkeydown={onKeydown}
+      onblur={commit}
+      onclick={(e) => e.stopPropagation()}
+      ondblclick={(e) => e.stopPropagation()}
+    />
+  {:else}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="group-label" ondblclick={startEdit}>{name}</div>
+  {/if}
 </Node>
 
 <style>
@@ -47,5 +106,23 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    pointer-events: auto;
+    cursor: default;
+  }
+  .group-label-edit {
+    margin: 8px 12px;
+    padding: 0;
+    font-size: 24px;
+    font-weight: 700;
+    font-family: inherit;
+    color: var(--text-normal);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid var(--interactive-accent);
+    border-radius: 0;
+    outline: none;
+    width: calc(100% - 24px);
+    pointer-events: auto;
+    box-sizing: border-box;
   }
 </style>

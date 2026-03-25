@@ -49,7 +49,13 @@
   let shortInputEl: HTMLTextAreaElement | undefined = $state();
   let editValue = $state("");
 
-  // --- Drag state (local, before committing to ui store) ---
+  // --- Title editing ---
+  let isEditingTitle = $state(false);
+  let titleEditValue = $state("");
+  let titleInputEl: HTMLInputElement | undefined = $state();
+  let titleWrapperEl: HTMLDivElement | undefined = $state();
+
+  // --- Drag state ---
   let dragTracking = false;
   let dragStartClientX = 0;
   let dragStartClientY = 0;
@@ -61,14 +67,46 @@
       requestAnimationFrame(() => {
         shortInputEl?.focus();
         shortInputEl?.select();
+        autoResizeShort();
       });
     }
   });
 
+  $effect(() => {
+    if (isEditingTitle && titleInputEl && titleWrapperEl) {
+      titleEditValue = title;
+      // Copy computed style from the h1 that was just removed.
+      // The wrapper preserves the h1 reference dimensions via CSS vars set below.
+      requestAnimationFrame(() => {
+        titleInputEl?.focus();
+        titleInputEl?.select();
+      });
+    }
+  });
+
+  /** Snapshot h1 computed style onto the wrapper as CSS vars, so the input can match. */
+  function captureH1Style() {
+    if (!titleWrapperEl) return;
+    const h1 = titleWrapperEl.querySelector("h1");
+    if (!h1) return;
+    const cs = getComputedStyle(h1);
+    titleWrapperEl.style.setProperty("--h1-font-size", cs.fontSize);
+    titleWrapperEl.style.setProperty("--h1-font-weight", cs.fontWeight);
+    titleWrapperEl.style.setProperty("--h1-line-height", cs.lineHeight);
+    titleWrapperEl.style.setProperty("--h1-font-family", cs.fontFamily);
+    titleWrapperEl.style.setProperty("--h1-letter-spacing", cs.letterSpacing);
+    titleWrapperEl.style.setProperty("--h1-min-height", cs.height);
+  }
+
+  function autoResizeShort() {
+    if (!shortInputEl) return;
+    shortInputEl.style.height = "auto";
+    shortInputEl.style.height = shortInputEl.scrollHeight + "px";
+  }
+
   function handleClick(e: MouseEvent) {
     if (e.button !== 0) return;
 
-    // Retarget mode: complete retarget to this node
     if (isRetargeting && !isRetargetAnchor) {
       e.stopPropagation();
       const rDimId = ui.retargetDimId;
@@ -99,7 +137,6 @@
       return;
     }
 
-    // Connection mode: complete connection
     if (isConnectingMode && ui.connectingFromId !== noteId) {
       e.stopPropagation();
       if (ui.activeDimensionId) {
@@ -145,6 +182,35 @@
     ui.editingLongId = noteId;
   }
 
+  function handleTitleDblClick(e: MouseEvent) {
+    if (e.button !== 0 || isConnectingMode || isRetargeting) return;
+    e.stopPropagation();
+    captureH1Style();
+    isEditingTitle = true;
+  }
+
+  function commitTitleEdit() {
+    const trimmed = titleEditValue.trim();
+    if (trimmed && trimmed !== title) {
+      project.updateNodeTitle(noteId, trimmed);
+    }
+    isEditingTitle = false;
+  }
+
+  function cancelTitleEdit() {
+    isEditingTitle = false;
+  }
+
+  function handleTitleKeydown(e: KeyboardEvent) {
+    e.stopPropagation();
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commitTitleEdit();
+    } else if (e.key === "Escape") {
+      cancelTitleEdit();
+    }
+  }
+
   function handleContextMenu(e: MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
@@ -167,12 +233,12 @@
       e.preventDefault();
       return;
     }
-    // Left button: start tracking for potential drag
     if (
       e.button === 0 &&
       !isConnectingMode &&
       !isRetargeting &&
-      !isEditingShort
+      !isEditingShort &&
+      !isEditingTitle
     ) {
       dragTracking = true;
       dragStartClientX = e.clientX;
@@ -188,9 +254,7 @@
     const dy = e.clientY - dragStartClientY;
     if (dx * dx + dy * dy > DRAG_THRESHOLD * DRAG_THRESHOLD) {
       dragTracking = false;
-      // Commit to drag mode
       ui.startDrag(noteId, ui.cursorWorldX, ui.cursorWorldY);
-      // Now the GraphEditor handles pointermove/pointerup for the ghost
       window.removeEventListener("pointermove", onDragPointerMove);
       window.removeEventListener("pointerup", onDragPointerUp);
     }
@@ -250,40 +314,56 @@
   onauxclick={handleAuxClick}
   onpointerdown={handlePointerDown}
 >
-  <h1>{title}</h1>
+  <div class="node-title" bind:this={titleWrapperEl}>
+    {#if isEditingTitle}
+      <input
+        bind:this={titleInputEl}
+        bind:value={titleEditValue}
+        class="title-edit"
+        onkeydown={handleTitleKeydown}
+        onblur={commitTitleEdit}
+        onclick={(e) => e.stopPropagation()}
+        ondblclick={(e) => e.stopPropagation()}
+      />
+    {:else}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <h1 ondblclick={handleTitleDblClick}>{title}</h1>
+    {/if}
+  </div>
 
-  {#if isEditingShort}
-    <!-- svelte-ignore a11y_autofocus -->
-    <textarea
-      bind:this={shortInputEl}
-      bind:value={editValue}
-      class="short-edit"
-      onkeydown={handleShortKeydown}
-      onblur={handleShortBlur}
-      onclick={(e) => e.stopPropagation()}
-      ondblclick={(e) => e.stopPropagation()}
-      rows="2"
-    ></textarea>
-  {:else}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      class="short-text"
-      onclick={handleShortClick}
-      ondblclick={(e) => e.stopPropagation()}
-    >
-      {#if short}
-        <MarkdownContent {app} markdown={short} {parentComponent} />
-      {:else}
-        <span class="short-placeholder">Click to add description…</span>
-      {/if}
-    </div>
-  {/if}
+  <div class="node-body">
+    {#if isEditingShort}
+      <textarea
+        bind:this={shortInputEl}
+        bind:value={editValue}
+        class="short-edit"
+        onkeydown={handleShortKeydown}
+        onblur={handleShortBlur}
+        oninput={autoResizeShort}
+        onclick={(e) => e.stopPropagation()}
+        ondblclick={(e) => e.stopPropagation()}
+      ></textarea>
+    {:else}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="short-text"
+        onclick={handleShortClick}
+        ondblclick={(e) => e.stopPropagation()}
+      >
+        {#if short}
+          <MarkdownContent {app} markdown={short} {parentComponent} />
+        {:else}
+          <span class="short-placeholder">Click to add description…</span>
+        {/if}
+      </div>
+    {/if}
+  </div>
 </Node>
 
 <style>
   :global(.node-card) {
-    padding: 8px 16px;
+    padding: 8px 16px 12px;
     background-color: var(--background-primary);
     border-radius: var(--radius-m);
     border: 2px solid rgb(var(--canvas-color));
@@ -346,9 +426,43 @@
     pointer-events: none;
   }
 
+  .node-title h1 {
+    margin: 0;
+    padding: 0;
+  }
+
+  /*
+   * The input reads CSS vars that were captured from the live h1's
+   * getComputedStyle right before switching to edit mode.
+   * This guarantees pixel-identical size regardless of Obsidian theme.
+   */
+  .title-edit {
+    display: block;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-bottom: 2px solid var(--interactive-accent);
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-normal);
+    outline: none;
+    box-sizing: border-box;
+    font-size: var(--h1-font-size, 2em);
+    font-weight: var(--h1-font-weight, 700);
+    line-height: var(--h1-line-height, 1.2);
+    font-family: var(--h1-font-family, inherit);
+    letter-spacing: var(--h1-letter-spacing, normal);
+    min-height: var(--h1-min-height, auto);
+  }
+
+  .node-body {
+    min-height: 1.2em;
+  }
+
   .short-text {
     cursor: text;
-    min-height: 1em;
+    min-height: 1.2em;
   }
 
   .short-placeholder {
@@ -366,7 +480,9 @@
     color: var(--text-normal);
     font-size: var(--font-ui-small);
     font-family: inherit;
-    resize: vertical;
+    resize: none;
     outline: none;
+    overflow: hidden;
+    box-sizing: border-box;
   }
 </style>
