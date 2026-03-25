@@ -53,12 +53,45 @@
     ui.editingShortId = null;
   }
 
-  // --- Track cursor in world space ---
+  // --- Track cursor in world space + update drag ghost ---
 
   function handlePointerMove(e: PointerEvent) {
     if (!canvasRef) return;
     const world = canvasRef.clientToWorld(e.clientX, e.clientY);
     ui.updateCursor(world.x, world.y);
+
+    if (ui.isDraggingNode) {
+      ui.updateDrag(world.x, world.y);
+    }
+  }
+
+  function handlePointerUp(_e: PointerEvent) {
+    if (!ui.isDraggingNode || !ui.draggingNodeId) return;
+
+    const nodeId = ui.draggingNodeId;
+    const wx = ui.dragGhostX;
+    const wy = ui.dragGhostY;
+
+    // Hit-test against layout groups to find drop target
+    let targetGroupId: string | null = null;
+    for (const [groupId, g] of Object.entries(layout.groups)) {
+      if (groupId === "__ungrouped") continue;
+      if (
+        wx >= g.x &&
+        wx <= g.x + g.width &&
+        wy >= g.y &&
+        wy <= g.y + g.height
+      ) {
+        targetGroupId = groupId;
+        break;
+      }
+    }
+
+    if (ui.activeDimensionId) {
+      project.setNoteMembership(nodeId, ui.activeDimensionId, targetGroupId);
+    }
+
+    ui.endDrag();
   }
 
   // --- Keyboard shortcuts ---
@@ -79,7 +112,6 @@
       return;
     }
 
-    // Also support Ctrl+Y for redo
     if (e.key === "y" && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
       e.preventDefault();
       project.performRedo();
@@ -89,7 +121,9 @@
     if (inInput) return;
 
     if (e.key === "Escape") {
-      if (ui.connectingFromId) {
+      if (ui.isDraggingNode) {
+        ui.endDrag();
+      } else if (ui.connectingFromId) {
         ui.cancelConnection();
       } else if (ui.isRetargeting) {
         ui.cancelRetarget();
@@ -174,11 +208,49 @@
     window.addEventListener("wheel", onWheel, { passive: false });
     return () => window.removeEventListener("wheel", onWheel);
   });
+
+  // --- Drag ghost derived ---
+  const dragGhost = $derived.by(() => {
+    if (!ui.draggingNodeId) return null;
+    const nodeLayout = layout.nodes[ui.draggingNodeId];
+    const note = project.project.notes[ui.draggingNodeId];
+    if (!nodeLayout || !note) return null;
+    return {
+      x: ui.dragGhostX - nodeLayout.width / 2,
+      y: ui.dragGhostY - nodeLayout.height / 2,
+      width: nodeLayout.width,
+      height: nodeLayout.height,
+      title: note.title,
+    };
+  });
+
+  // --- Highlight group under drag cursor ---
+  const dropTargetGroupId = $derived.by(() => {
+    if (!ui.isDraggingNode) return null;
+    const wx = ui.dragGhostX;
+    const wy = ui.dragGhostY;
+    for (const [groupId, g] of Object.entries(layout.groups)) {
+      if (groupId === "__ungrouped") continue;
+      if (
+        wx >= g.x &&
+        wx <= g.x + g.width &&
+        wy >= g.y &&
+        wy <= g.y + g.height
+      ) {
+        return groupId;
+      }
+    }
+    return null;
+  });
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="dim-graph-root" onpointermove={handlePointerMove}>
+<div
+  class="dim-graph-root"
+  onpointermove={handlePointerMove}
+  onpointerup={handlePointerUp}
+>
   <div class="canvas-area">
     <AxisSwitcher {project} {ui} />
 
@@ -213,6 +285,7 @@
           width={g.width}
           height={g.height}
           name={g.name}
+          highlight={dropTargetGroupId === groupId}
         />
       {/each}
 
@@ -234,6 +307,19 @@
           {project}
         />
       {/each}
+
+      <!-- Drag ghost -->
+      {#if dragGhost}
+        <div
+          class="drag-ghost"
+          style:left="{dragGhost.x}px"
+          style:top="{dragGhost.y}px"
+          style:width="{dragGhost.width}px"
+          style:min-height="{dragGhost.height}px"
+        >
+          <h1>{dragGhost.title}</h1>
+        </div>
+      {/if}
     </Canvas>
   </div>
 </div>
@@ -278,5 +364,18 @@
   .delete-hint {
     border-color: var(--color-red);
     bottom: 40px;
+  }
+  .drag-ghost {
+    position: absolute;
+    padding: 8px 16px;
+    background-color: var(--background-primary);
+    border-radius: var(--radius-m);
+    border: 2px solid var(--interactive-accent);
+    box-shadow:
+      var(--shadow-stationary),
+      0 0 0 2px var(--interactive-accent);
+    opacity: 0.7;
+    pointer-events: none;
+    z-index: 100;
   }
 </style>

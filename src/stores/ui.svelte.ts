@@ -20,9 +20,7 @@ export function createUiStore() {
     let retargetDimId = $state<string | null>(null);
     let retargetIndex = $state<number | null>(null);
     let retargetEnd = $state<RetargetEnd | null>(null);
-    // The node that stays fixed (the opposite end from what's being dragged)
     let retargetAnchorId = $state<string | null>(null);
-    // The original node at the dragged end (for label preservation)
     let retargetOriginalId = $state<string | null>(null);
     let retargetLabel = $state<string | null>(null);
 
@@ -41,6 +39,11 @@ export function createUiStore() {
     // Clipboard
     let clipboardNodeIds = $state<string[]>([]);
     let clipboardIsCut = $state(false);
+
+    // Node dragging
+    let draggingNodeId = $state<string | null>(null);
+    let dragGhostX = $state(0);
+    let dragGhostY = $state(0);
 
     return {
         // --- Dimensions ---
@@ -135,12 +138,6 @@ export function createUiStore() {
         get retargetOriginalId() { return retargetOriginalId; },
         get retargetLabel() { return retargetLabel; },
 
-        /**
-         * Start retargeting an existing connection.
-         * @param end - which end the user grabbed ("source" = first half, "target" = second half)
-         * @param anchorId - the node that stays fixed
-         * @param originalId - the node being detached (at the dragged end)
-         */
         startRetarget(dimId: string, connIndex: number, end: RetargetEnd, anchorId: string, originalId: string, label: string | null) {
             retargetDimId = dimId;
             retargetIndex = connIndex;
@@ -228,6 +225,27 @@ export function createUiStore() {
             clipboardIsCut = false;
         },
 
+        // --- Node dragging ---
+        get draggingNodeId() { return draggingNodeId; },
+        get dragGhostX() { return dragGhostX; },
+        get dragGhostY() { return dragGhostY; },
+        get isDraggingNode() { return draggingNodeId !== null; },
+
+        startDrag(nodeId: string, worldX: number, worldY: number) {
+            draggingNodeId = nodeId;
+            dragGhostX = worldX;
+            dragGhostY = worldY;
+        },
+
+        updateDrag(worldX: number, worldY: number) {
+            dragGhostX = worldX;
+            dragGhostY = worldY;
+        },
+
+        endDrag() {
+            draggingNodeId = null;
+        },
+
         // --- Bulk reset ---
         cancelAll() {
             connectingFromId = null;
@@ -240,13 +258,13 @@ export function createUiStore() {
             retargetAnchorId = null;
             retargetOriginalId = null;
             retargetLabel = null;
+            draggingNodeId = null;
         },
 
         get isDrawingConnection() {
             return connectingFromId !== null || retargetIndex !== null;
         },
 
-        /** The node the ghost line draws FROM — anchor in retarget, or connectingFromId for new */
         get ghostSourceId() {
             if (connectingFromId) return connectingFromId;
             if (retargetAnchorId) return retargetAnchorId;

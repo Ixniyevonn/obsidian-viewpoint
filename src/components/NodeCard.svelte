@@ -42,12 +42,18 @@
   const isConnectingSource = $derived(ui.connectingFromId === noteId);
   const isConnectingMode = $derived(ui.connectingFromId !== null);
   const isRetargeting = $derived(ui.isRetargeting);
-  // In retarget, the anchor node is the fixed end — don't allow dropping on it
   const isRetargetAnchor = $derived(ui.retargetAnchorId === noteId);
   const isEditingShort = $derived(ui.editingShortId === noteId);
+  const isBeingDragged = $derived(ui.draggingNodeId === noteId);
 
   let shortInputEl: HTMLTextAreaElement | undefined = $state();
   let editValue = $state("");
+
+  // --- Drag state (local, before committing to ui store) ---
+  let dragTracking = false;
+  let dragStartClientX = 0;
+  let dragStartClientY = 0;
+  const DRAG_THRESHOLD = 5;
 
   $effect(() => {
     if (isEditingShort && shortInputEl) {
@@ -76,14 +82,10 @@
         rEnd !== null &&
         rAnchor !== null
       ) {
-        // Remove old connection
         project.removeConnection(rDimId, rIdx);
-        // Add new connection with correct direction
         if (rEnd === "target") {
-          // Anchor is source, this node becomes new target
           project.addConnection(rDimId, rAnchor, noteId, rLabel);
         } else {
-          // Anchor is target, this node becomes new source
           project.addConnection(rDimId, noteId, rAnchor, rLabel);
         }
       }
@@ -91,7 +93,6 @@
       return;
     }
 
-    // Retarget mode: clicking anchor cancels
     if (isRetargeting && isRetargetAnchor) {
       e.stopPropagation();
       ui.cancelRetarget();
@@ -112,7 +113,6 @@
       return;
     }
 
-    // Connection mode: clicking source cancels
     if (isConnectingMode && ui.connectingFromId === noteId) {
       e.stopPropagation();
       ui.cancelConnection();
@@ -165,7 +165,41 @@
   function handlePointerDown(e: PointerEvent) {
     if (e.button === 1) {
       e.preventDefault();
+      return;
     }
+    // Left button: start tracking for potential drag
+    if (
+      e.button === 0 &&
+      !isConnectingMode &&
+      !isRetargeting &&
+      !isEditingShort
+    ) {
+      dragTracking = true;
+      dragStartClientX = e.clientX;
+      dragStartClientY = e.clientY;
+      window.addEventListener("pointermove", onDragPointerMove);
+      window.addEventListener("pointerup", onDragPointerUp);
+    }
+  }
+
+  function onDragPointerMove(e: PointerEvent) {
+    if (!dragTracking) return;
+    const dx = e.clientX - dragStartClientX;
+    const dy = e.clientY - dragStartClientY;
+    if (dx * dx + dy * dy > DRAG_THRESHOLD * DRAG_THRESHOLD) {
+      dragTracking = false;
+      // Commit to drag mode
+      ui.startDrag(noteId, ui.cursorWorldX, ui.cursorWorldY);
+      // Now the GraphEditor handles pointermove/pointerup for the ghost
+      window.removeEventListener("pointermove", onDragPointerMove);
+      window.removeEventListener("pointerup", onDragPointerUp);
+    }
+  }
+
+  function onDragPointerUp(_e: PointerEvent) {
+    dragTracking = false;
+    window.removeEventListener("pointermove", onDragPointerMove);
+    window.removeEventListener("pointerup", onDragPointerUp);
   }
 
   function commitShortEdit() {
@@ -207,7 +241,9 @@
     ? ' connect-target'
     : ''}{isRetargeting && !isRetargetAnchor
     ? ' connect-target'
-    : ''}{isRetargetAnchor ? ' connecting-source' : ''}"
+    : ''}{isRetargetAnchor ? ' connecting-source' : ''}{isBeingDragged
+    ? ' dragging'
+    : ''}"
   onclick={handleClick}
   ondblclick={handleDblClick}
   oncontextmenu={handleContextMenu}
@@ -303,6 +339,11 @@
   :global(.node-card:active) {
     border-color: var(--color-accent);
     box-shadow: var(--shadow-stationary), var(--shadow-border-accent);
+  }
+
+  :global(.node-card.dragging) {
+    opacity: 0.3;
+    pointer-events: none;
   }
 
   .short-text {
