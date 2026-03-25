@@ -28,4 +28,4 @@ test-vault/.obsidian/plugins/obsidian-svelte-plugin/*.json
 *.njsproj
 *.sln
 *.sw?
-test-vault/test.viewpoint
+*.viewpoint
