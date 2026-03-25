@@ -2,54 +2,20 @@
 <script lang="ts">
   import type { ProjectStore } from "../stores/project.svelte";
   import type { UiStore } from "../stores/ui.svelte";
-  import { generateId } from "../utils/helpers";
 
   interface Props {
     project: ProjectStore;
     ui: UiStore;
+    onOpenDialog: (mode: "create" | "edit") => void;
   }
 
-  const { project, ui }: Props = $props();
+  const { project, ui, onOpenDialog }: Props = $props();
 
-  /** Maximum number of dimension pills shown in the switcher. */
   const MAX_VISIBLE_DIMS = 10;
 
   const dimIds = $derived(Object.keys(project.project.dimensions));
   const dims = $derived(project.project.dimensions);
   const visibleIds = $derived(dimIds.slice(0, MAX_VISIBLE_DIMS));
-
-  // --- creation state ---
-  let newName = $state("");
-  let inputEl: HTMLInputElement | undefined = $state();
-
-  function startCreate() {
-    ui.creatingDimension = true;
-    newName = "";
-    requestAnimationFrame(() => inputEl?.focus());
-  }
-
-  function confirmCreate() {
-    const name = newName.trim();
-    if (!name) {
-      ui.creatingDimension = false;
-      return;
-    }
-    const id = generateId("dim");
-    project.addDimension(id, name);
-    ui.activeDimensionId = id;
-    ui.creatingDimension = false;
-    newName = "";
-  }
-
-  function cancelCreate() {
-    ui.creatingDimension = false;
-    newName = "";
-  }
-
-  function onInputKeydown(e: KeyboardEvent) {
-    if (e.key === "Enter") confirmCreate();
-    else if (e.key === "Escape") cancelCreate();
-  }
 
   function onKeydown(e: KeyboardEvent) {
     if (e.key === "Tab" && !e.altKey && !e.shiftKey) {
@@ -75,6 +41,9 @@
       onclick={() => (ui.activeDimensionId = id)}
     >
       {dims[id].name}
+      {#if dims[id]["x-spectrum"] || dims[id]["y-spectrum"]}
+        <span class="spectrum-badge" title="Has spectrum">◈</span>
+      {/if}
     </button>
   {/each}
 
@@ -87,20 +56,19 @@
     </span>
   {/if}
 
-  {#if ui.creatingDimension}
-    <input
-      bind:this={inputEl}
-      bind:value={newName}
-      class="axis-input"
-      placeholder="Dimension name…"
-      onkeydown={onInputKeydown}
-      onblur={cancelCreate}
-    />
-  {:else}
-    <button class="axis-add" onclick={startCreate} title="New dimension"
-      >+</button
+  {#if ui.activeDimensionId}
+    <button
+      class="axis-edit"
+      onclick={() => onOpenDialog("edit")}
+      title="Edit dimension">✎</button
     >
   {/if}
+
+  <button
+    class="axis-add"
+    onclick={() => onOpenDialog("create")}
+    title="New dimension">+</button
+  >
 </div>
 
 <style>
@@ -131,6 +99,9 @@
     cursor: pointer;
     white-space: nowrap;
     transition: all 120ms ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
   }
   .axis-pill:hover {
     color: var(--text-normal);
@@ -143,11 +114,31 @@
     border-color: var(--interactive-accent);
   }
 
+  .spectrum-badge {
+    font-size: 10px;
+    opacity: 0.7;
+  }
+
   .axis-overflow {
     padding: 4px 8px;
     color: var(--text-faint);
     font-size: var(--font-ui-small);
     cursor: default;
+  }
+
+  .axis-edit {
+    padding: 4px 8px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-s);
+    color: var(--text-faint);
+    font-size: var(--font-ui-small);
+    cursor: pointer;
+    line-height: 1;
+  }
+  .axis-edit:hover {
+    color: var(--text-muted);
+    background: var(--background-modifier-hover);
   }
 
   .axis-add {
@@ -164,16 +155,5 @@
   .axis-add:hover {
     color: var(--text-muted);
     border-color: var(--text-faint);
-  }
-
-  .axis-input {
-    padding: 4px 10px;
-    border: 1px solid var(--interactive-accent);
-    border-radius: var(--radius-s);
-    background: var(--background-primary);
-    color: var(--text-normal);
-    font-size: var(--font-ui-small);
-    width: 140px;
-    outline: none;
   }
 </style>

@@ -1,4 +1,4 @@
-import type { Connection, ProjectData } from "../types";
+import type { Connection, ProjectData, Spectrum } from "../types";
 
 export interface NodeLayout {
     x: number;
@@ -18,6 +18,17 @@ export interface GroupLayout {
 export interface LayoutResult {
     nodes: Record<string, NodeLayout>;
     groups: Record<string, GroupLayout>;
+    /** If spectra are active, provides stop positions for the canvas overlay */
+    xSpectrum?: SpectrumLayout;
+    ySpectrum?: SpectrumLayout;
+}
+
+export interface SpectrumLayout {
+    name: string;
+    poles: [string, string];
+    stops: { name: string; position: number }[];
+    /** Total extent in pixels along this axis */
+    extent: number;
 }
 
 export interface LayoutOptions {
@@ -70,10 +81,6 @@ function buildGroupAdjacency(
     return adj;
 }
 
-/**
- * Find connected components within a subset of group ids,
- * considering only edges among that subset.
- */
 function findComponents(
     nodeIds: string[],
     adj: Map<string, Set<string>>,
@@ -104,25 +111,12 @@ interface GroupPlacement {
     row: number;
 }
 
-/**
- * BFS from the most-connected group (root at column 0).
- *
- * Root's unvisited neighbors are partitioned into connected components
- * among themselves. Components alternate left (col −1) and right (col +1),
- * so groups that share no inter-group connections land on opposite sides
- * of root — lines from root to each side never cross through an unrelated
- * group.
- *
- * Non-root nodes push their unvisited neighbors further outward in the
- * same direction they were placed relative to root.
- */
 function computeGroupPlacements(
     adj: Map<string, Set<string>>,
     allGroupIds: string[],
 ): Map<string, GroupPlacement> {
     const placement = new Map<string, GroupPlacement>();
 
-    // Pick root: highest degree
     let root = allGroupIds[0];
     let maxDeg = -1;
     for (const [id, neighbors] of adj) {
@@ -132,7 +126,6 @@ function computeGroupPlacements(
         }
     }
 
-    // No edges at all — line up horizontally
     if (maxDeg <= 0) {
         for (let i = 0; i < allGroupIds.length; i++) {
             placement.set(allGroupIds[i], { col: i, row: 0 });
@@ -141,7 +134,7 @@ function computeGroupPlacements(
     }
 
     const visited = new Set<string>();
-    const colRows = new Map<number, number>(); // col → next available row
+    const colRows = new Map<number, number>();
 
     function placeAt(id: string, col: number) {
         const row = colRows.get(col) ?? 0;
@@ -164,10 +157,7 @@ function computeGroupPlacements(
             if (!unvisited.length) continue;
 
             if (currentCol === 0) {
-                // Center node: partition neighbors into connected components
-                // among themselves, then alternate components left / right.
                 const components = findComponents(unvisited, adj);
-
                 if (components.length === 1) {
                     for (const id of components[0]) {
                         placeAt(id, 1);
@@ -185,7 +175,6 @@ function computeGroupPlacements(
                     }
                 }
             } else {
-                // Non-center: continue outward in the same direction
                 const direction = currentCol > 0 ? 1 : -1;
                 for (const id of unvisited) {
                     placeAt(id, currentCol + direction);
@@ -197,7 +186,6 @@ function computeGroupPlacements(
         frontier = nextFrontier;
     }
 
-    // Unreachable groups (no connections at all) — append after rightmost col
     const maxCol = Math.max(...[...placement.values()].map((p) => p.col), 0);
     let extraCol = maxCol + 1;
     for (const id of allGroupIds) {
@@ -208,6 +196,23 @@ function computeGroupPlacements(
     }
 
     return placement;
+}
+
+/**
+ * Compute pixel position for a stop index within a spectrum.
+ * 0% = first stop, 100% = last stop.
+ * Returns center position for the group at that stop.
+ */
+function stopPosition(
+    stopIndex: number,
+    totalStops: number,
+    extent: number,
+    groupSize: number,
+    margin: number,
+): number {
+    if (totalStops <= 1) return margin;
+    const usable = extent - margin * 2 - groupSize;
+    return margin + (stopIndex / (totalStops - 1)) * usable;
 }
 
 export function layoutEngine(
@@ -283,11 +288,39 @@ export function layoutEngine(
     const LABEL_H = 40;
     const groupWidth = nodeWidth + groupPadding * 2;
 
-    // Collect all participating group IDs
+    const xSpec = dim["x-spectrum"] as Spectrum | undefined;
+    const ySpec = dim["y-spectrum"] as Spectrum | undefined;
+    const hasSpectra = !!xSpec || !!ySpec;
+
+    // ========================================================================
+    // SPECTRUM LAYOUT
+    // ========================================================================
+    if (hasSpectra) {
+        return layoutWithSpectra(
+            project,
+            activeDimensionId,
+            dim,
+            buckets,
+            ungrouped,
+            noteIds,
+            xSpec ?? null,
+            ySpec ?? null,
+            nodeWidth,
+            nodeGap,
+            groupGap,
+            groupPadding,
+            LABEL_H,
+            groupWidth,
+            contentWidth,
+        );
+    }
+
+    // ========================================================================
+    // ORIGINAL BFS ADJACENCY LAYOUT (no spectra)
+    // ========================================================================
     const allGroupIds = dim.groups.map((g) => g.id);
     if (ungrouped.length) allGroupIds.push("__ungrouped");
 
-    // Build adjacency & compute placements
     const connections = project.connections[activeDimensionId] || [];
     const adj = buildGroupAdjacency(
         connections,
@@ -297,11 +330,9 @@ export function layoutEngine(
     );
     const placements = computeGroupPlacements(adj, allGroupIds);
 
-    // Normalize columns so the leftmost becomes 0
     const minCol = Math.min(...[...placements.values()].map((p) => p.col));
     for (const p of placements.values()) p.col -= minCol;
 
-    // Group placements by column, sorted by row within each
     const columns = new Map<number, string[]>();
     for (const [id, p] of placements) {
         let list = columns.get(p.col);
@@ -312,12 +343,9 @@ export function layoutEngine(
         list.push(id);
     }
     for (const ids of columns.values()) {
-        ids.sort(
-            (a, b) => placements.get(a)!.row - placements.get(b)!.row,
-        );
+        ids.sort((a, b) => placements.get(a)!.row - placements.get(b)!.row);
     }
 
-    // --- Position groups column by column ---
     const sortedCols = [...columns.keys()].sort((a, b) => a - b);
 
     for (const col of sortedCols) {
@@ -327,9 +355,7 @@ export function layoutEngine(
 
         for (const groupId of groupIds) {
             const members =
-                groupId === "__ungrouped"
-                    ? ungrouped
-                    : buckets[groupId] || [];
+                groupId === "__ungrouped" ? ungrouped : buckets[groupId] || [];
             const groupName =
                 groupId === "__ungrouped"
                     ? "Ungrouped"
@@ -362,6 +388,216 @@ export function layoutEngine(
 
             cursorY += gh + groupGap;
         }
+    }
+
+    return result;
+}
+
+function layoutWithSpectra(
+    project: ProjectData,
+    dimId: string,
+    dim: ProjectData["dimensions"][string],
+    buckets: Record<string, string[]>,
+    ungrouped: string[],
+    _noteIds: string[],
+    xSpec: Spectrum | null,
+    ySpec: Spectrum | null,
+    nodeWidth: number,
+    nodeGap: number,
+    groupGap: number,
+    groupPadding: number,
+    LABEL_H: number,
+    groupWidth: number,
+    contentWidth: number,
+): LayoutResult {
+    const result: LayoutResult = { nodes: {}, groups: {} };
+
+    function heightOf(id: string): number {
+        const note = project.notes[id];
+        return estimateNodeHeight(note.title, note.short, contentWidth);
+    }
+
+    function groupContentHeight(members: string[]): number {
+        let h = LABEL_H + groupPadding;
+        for (const noteId of members) {
+            h += heightOf(noteId) + nodeGap;
+        }
+        return members.length > 0 ? h - nodeGap + groupPadding : LABEL_H + groupPadding * 2;
+    }
+
+    const xStopIndex = new Map<string, number>();
+    const yStopIndex = new Map<string, number>();
+    if (xSpec) xSpec.stops.forEach((s, i) => xStopIndex.set(s, i));
+    if (ySpec) ySpec.stops.forEach((s, i) => yStopIndex.set(s, i));
+
+    const xStopCount = xSpec ? xSpec.stops.length : 1;
+    const yStopCount = ySpec ? ySpec.stops.length : 1;
+
+    // Pre-compute group heights to determine per-row max height
+    // Grid: xStopCount columns × yStopCount rows
+    // Groups without stop assignment go to a separate "unplaced" area
+
+    interface GroupInfo {
+        id: string;
+        name: string;
+        members: string[];
+        xIdx: number; // -1 = unplaced
+        yIdx: number; // -1 = unplaced
+        contentH: number;
+    }
+
+    const groups: GroupInfo[] = [];
+    for (const g of dim.groups) {
+        const members = buckets[g.id] || [];
+        const xIdx = g.x && xStopIndex.has(g.x) ? xStopIndex.get(g.x)! : (xSpec ? -1 : 0);
+        const yIdx = g.y && yStopIndex.has(g.y) ? yStopIndex.get(g.y)! : (ySpec ? -1 : 0);
+        groups.push({
+            id: g.id,
+            name: g.name,
+            members,
+            xIdx,
+            yIdx,
+            contentH: groupContentHeight(members),
+        });
+    }
+
+    // Add ungrouped bucket
+    if (ungrouped.length) {
+        groups.push({
+            id: "__ungrouped",
+            name: "Ungrouped",
+            members: ungrouped,
+            xIdx: -1,
+            yIdx: -1,
+            contentH: groupContentHeight(ungrouped),
+        });
+    }
+
+    // Separate placed vs unplaced groups
+    const placed = groups.filter((g) => g.xIdx >= 0 && g.yIdx >= 0);
+    const unplaced = groups.filter((g) => g.xIdx < 0 || g.yIdx < 0);
+
+    // Build grid: cell -> list of groups at that position
+    const grid = new Map<string, GroupInfo[]>();
+    for (const g of placed) {
+        const key = `${g.xIdx},${g.yIdx}`;
+        const list = grid.get(key) || [];
+        list.push(g);
+        grid.set(key, list);
+    }
+
+    // Compute per-column width (all same) and per-row max height
+    const rowMaxH = new Array(yStopCount).fill(LABEL_H + groupPadding * 2);
+    for (const g of placed) {
+        const cellKey = `${g.xIdx},${g.yIdx}`;
+        // Stack groups at same cell, so sum their heights
+        const cellGroups = grid.get(cellKey) || [];
+        let totalH = 0;
+        for (const cg of cellGroups) totalH += cg.contentH + groupGap;
+        totalH -= groupGap;
+        rowMaxH[g.yIdx] = Math.max(rowMaxH[g.yIdx], totalH);
+    }
+
+    // Compute row Y positions and column X positions
+    const SPECTRUM_MARGIN = 80;
+    const colWidth = groupWidth;
+
+    // Total extent
+    const xExtent = Math.max(
+        (xStopCount) * (colWidth + groupGap) - groupGap + SPECTRUM_MARGIN * 2,
+        colWidth + SPECTRUM_MARGIN * 2,
+    );
+    const totalRowH = rowMaxH.reduce((a, b) => a + b, 0) + (yStopCount - 1) * groupGap;
+    const yExtent = Math.max(
+        totalRowH + SPECTRUM_MARGIN * 2,
+        LABEL_H + groupPadding * 2 + SPECTRUM_MARGIN * 2,
+    );
+
+    // Row Y offsets
+    const rowY: number[] = [];
+    let yAccum = SPECTRUM_MARGIN;
+    for (let r = 0; r < yStopCount; r++) {
+        rowY.push(yAccum);
+        yAccum += rowMaxH[r] + groupGap;
+    }
+
+    // Column X offsets
+    const colX: number[] = [];
+    for (let c = 0; c < xStopCount; c++) {
+        colX.push(SPECTRUM_MARGIN + c * (colWidth + groupGap));
+    }
+
+    // Place groups on the grid
+    // Track per-cell Y cursor for stacking multiple groups in same cell
+    const cellCursor = new Map<string, number>();
+
+    for (const g of placed) {
+        const cellKey = `${g.xIdx},${g.yIdx}`;
+        let cellY = cellCursor.get(cellKey) ?? rowY[g.yIdx];
+        const gx = colX[g.xIdx];
+
+        placeGroup(g, gx, cellY);
+        cellCursor.set(cellKey, cellY + g.contentH + groupGap);
+    }
+
+    // Place unplaced groups below the spectrum grid
+    let unplacedY = yAccum + groupGap;
+    let unplacedX = SPECTRUM_MARGIN;
+    for (const g of unplaced) {
+        placeGroup(g, unplacedX, unplacedY);
+        unplacedX += colWidth + groupGap;
+        // Wrap after a few columns
+        if (unplacedX > xExtent - colWidth) {
+            unplacedX = SPECTRUM_MARGIN;
+            unplacedY += g.contentH + groupGap;
+        }
+    }
+
+    function placeGroup(g: GroupInfo, gx: number, gy: number) {
+        let innerY = gy + LABEL_H + groupPadding;
+        for (const noteId of g.members) {
+            const h = heightOf(noteId);
+            result.nodes[noteId] = {
+                x: gx + groupPadding,
+                y: innerY,
+                width: nodeWidth,
+                height: h,
+            };
+            innerY += h + nodeGap;
+        }
+
+        result.groups[g.id] = {
+            x: gx,
+            y: gy,
+            width: colWidth,
+            height: g.contentH,
+            name: g.name,
+        };
+    }
+
+    // Build spectrum layout info for the canvas overlay
+    if (xSpec) {
+        result.xSpectrum = {
+            name: xSpec.name,
+            poles: xSpec.poles,
+            stops: xSpec.stops.map((name, i) => ({
+                name,
+                position: colX[i] + colWidth / 2,
+            })),
+            extent: xExtent,
+        };
+    }
+
+    if (ySpec) {
+        result.ySpectrum = {
+            name: ySpec.name,
+            poles: ySpec.poles,
+            stops: ySpec.stops.map((name, i) => ({
+                name,
+                position: rowY[i] + rowMaxH[i] / 2,
+            })),
+            extent: yExtent,
+        };
     }
 
     return result;

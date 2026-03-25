@@ -1,4 +1,4 @@
-import type { ProjectData } from "../types";
+import type { ProjectData, Spectrum } from "../types";
 import { createUndoManager } from "./undo";
 
 function emptyProject(): ProjectData {
@@ -136,9 +136,12 @@ export function createProjectStore() {
 
         // --- Dimensions ---
 
-        addDimension(id: string, name: string) {
+        addDimension(id: string, name: string, xSpectrum?: Spectrum | null, ySpectrum?: Spectrum | null) {
             snap();
-            project.dimensions[id] = { name, groups: [] };
+            const dim: any = { name, groups: [] };
+            if (xSpectrum) dim["x-spectrum"] = xSpectrum;
+            if (ySpectrum) dim["y-spectrum"] = ySpectrum;
+            project.dimensions[id] = dim;
             project.connections[id] = [];
             touch(); notify();
             return project;
@@ -154,6 +157,47 @@ export function createProjectStore() {
             for (const key of Object.keys(project.node_order)) {
                 if (key.startsWith(id + ":")) delete project.node_order[key];
             }
+            touch(); notify();
+            return project;
+        },
+
+        updateDimension(id: string, name: string, xSpectrum: Spectrum | null, ySpectrum: Spectrum | null) {
+            snap();
+            const dim = project.dimensions[id];
+            if (!dim) return project;
+
+            dim.name = name;
+
+            // Update spectra
+            if (xSpectrum) {
+                dim["x-spectrum"] = xSpectrum;
+            } else {
+                delete dim["x-spectrum"];
+                // Clear x-stop assignments from groups
+                for (const g of dim.groups) g.x = null;
+            }
+
+            if (ySpectrum) {
+                dim["y-spectrum"] = ySpectrum;
+            } else {
+                delete dim["y-spectrum"];
+                for (const g of dim.groups) g.y = null;
+            }
+
+            // Validate existing group stop assignments against new stops
+            if (xSpectrum) {
+                const validStops = new Set(xSpectrum.stops);
+                for (const g of dim.groups) {
+                    if (g.x && !validStops.has(g.x)) g.x = null;
+                }
+            }
+            if (ySpectrum) {
+                const validStops = new Set(ySpectrum.stops);
+                for (const g of dim.groups) {
+                    if (g.y && !validStops.has(g.y)) g.y = null;
+                }
+            }
+
             touch(); notify();
             return project;
         },
@@ -194,6 +238,18 @@ export function createProjectStore() {
                 }
                 delete project.node_order[`${dimensionId}:${groupId}`];
             }
+            touch(); notify();
+            return project;
+        },
+
+        /** Set a group's position on a spectrum axis */
+        setGroupStop(dimensionId: string, groupId: string, axis: "x" | "y", stopName: string | null) {
+            snap();
+            const dim = project.dimensions[dimensionId];
+            if (!dim) return project;
+            const group = dim.groups.find((g) => g.id === groupId);
+            if (!group) return project;
+            group[axis] = stopName;
             touch(); notify();
             return project;
         },

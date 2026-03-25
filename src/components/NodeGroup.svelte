@@ -9,8 +9,11 @@
     name: string;
     highlight?: boolean;
     selected?: boolean;
+    draggable?: boolean;
+    beingDragged?: boolean;
     onRename?: (newName: string) => void;
     onSelect?: (e: MouseEvent) => void;
+    onDragStart?: (e: PointerEvent) => void;
   }
 
   const {
@@ -21,15 +24,17 @@
     name,
     highlight = false,
     selected = false,
+    draggable = false,
+    beingDragged = false,
     onRename,
     onSelect,
+    onDragStart,
   }: Props = $props();
 
   let isEditing = $state(false);
   let editValue = $state("");
   let inputEl: HTMLInputElement | undefined = $state();
 
-  // Track whether pointer moved between down and up (to distinguish click from drag/pan)
   let didMove = false;
   let downX = 0;
   let downY = 0;
@@ -40,7 +45,10 @@
     didMove = false;
     downX = e.clientX;
     downY = e.clientY;
-    // Don't stop propagation — let canvas handle panning
+
+    if (draggable) {
+      onDragStart?.(e);
+    }
   }
 
   function handleBodyPointerMove(e: PointerEvent) {
@@ -105,9 +113,10 @@
   {y}
   cssClass="node-group{highlight ? ' group-drop-target' : ''}{selected
     ? ' group-selected'
+    : ''}{draggable ? ' group-draggable' : ''}{beingDragged
+    ? ' group-being-dragged'
     : ''}"
 >
-  <!-- Invisible click-catcher covering entire group body -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="group-click-catcher"
@@ -128,8 +137,14 @@
     />
   {:else}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div class="group-label" onclick={handleLabelClick} ondblclick={startEdit}>
       {name}
+      {#if draggable}
+        <span class="drag-indicator" title="Drag to reposition on spectrum"
+          >⠿</span
+        >
+      {/if}
     </div>
   {/if}
 </Node>
@@ -158,6 +173,13 @@
       var(--shadow-stationary),
       0 0 0 2px var(--interactive-accent);
   }
+  :global(.node-group.group-draggable) {
+    cursor: grab;
+  }
+  :global(.node-group.group-being-dragged) {
+    opacity: 0.25;
+    pointer-events: none;
+  }
 
   .group-click-catcher {
     position: absolute;
@@ -165,6 +187,10 @@
     pointer-events: auto;
     cursor: default;
     z-index: 0;
+  }
+
+  :global(.node-group.group-draggable) .group-click-catcher {
+    cursor: grab;
   }
 
   .group-label {
@@ -179,7 +205,18 @@
     text-overflow: ellipsis;
     pointer-events: auto;
     cursor: default;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
+
+  .drag-indicator {
+    font-size: 14px;
+    color: var(--text-faint);
+    opacity: 0.5;
+    cursor: grab;
+  }
+
   .group-label-edit {
     position: relative;
     z-index: 1;
