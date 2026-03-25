@@ -11,16 +11,12 @@
 
   const { project, ui }: Props = $props();
 
+  /** Maximum number of dimension pills shown in the switcher. */
+  const MAX_VISIBLE_DIMS = 10;
+
   const dimIds = $derived(Object.keys(project.project.dimensions));
   const dims = $derived(project.project.dimensions);
-  const activeIdx = $derived(
-    ui.activeDimensionId ? dimIds.indexOf(ui.activeDimensionId) : -1,
-  );
-
-  // Windowed slice: up to 2 left, active, up to 2 right
-  const windowStart = $derived(Math.max(0, activeIdx - 2));
-  const windowEnd = $derived(Math.min(dimIds.length, activeIdx + 3));
-  const visibleIds = $derived(dimIds.slice(windowStart, windowEnd));
+  const visibleIds = $derived(dimIds.slice(0, MAX_VISIBLE_DIMS));
 
   // --- creation state ---
   let newName = $state("");
@@ -29,7 +25,6 @@
   function startCreate() {
     ui.creatingDimension = true;
     newName = "";
-    // focus after mount
     requestAnimationFrame(() => inputEl?.focus());
   }
 
@@ -56,12 +51,6 @@
     else if (e.key === "Escape") cancelCreate();
   }
 
-  //   function onWheel(e: WheelEvent) {
-  //     if (!dimIds.length) return;
-  //     e.preventDefault();
-  //     ui.cycle(dimIds, e.deltaY > 0 ? 1 : -1);
-  //   }
-
   function onKeydown(e: KeyboardEvent) {
     if (e.key === "Tab" && !e.altKey && !e.shiftKey) {
       if (e.ctrlKey) {
@@ -78,15 +67,6 @@
 <svelte:window on:keydown={onKeydown} />
 
 <div class="axis-switcher">
-  {#if activeIdx > 2}
-    <button
-      class="axis-ellipsis"
-      onclick={() => (ui.activeDimensionId = dimIds[0])}
-    >
-      ‹‹
-    </button>
-  {/if}
-
   {#each visibleIds as id (id)}
     {@const isActive = id === ui.activeDimensionId}
     <button
@@ -98,13 +78,13 @@
     </button>
   {/each}
 
-  {#if activeIdx < dimIds.length - 3}
-    <button
-      class="axis-ellipsis"
-      onclick={() => (ui.activeDimensionId = dimIds[dimIds.length - 1])}
+  {#if dimIds.length > MAX_VISIBLE_DIMS}
+    <span
+      class="axis-overflow"
+      title="{dimIds.length - MAX_VISIBLE_DIMS} more dimensions not shown"
     >
-      ››
-    </button>
+      +{dimIds.length - MAX_VISIBLE_DIMS}
+    </span>
   {/if}
 
   {#if ui.creatingDimension}
@@ -163,16 +143,11 @@
     border-color: var(--interactive-accent);
   }
 
-  .axis-ellipsis {
-    padding: 4px 6px;
-    background: transparent;
-    border: none;
+  .axis-overflow {
+    padding: 4px 8px;
     color: var(--text-faint);
-    cursor: pointer;
     font-size: var(--font-ui-small);
-  }
-  .axis-ellipsis:hover {
-    color: var(--text-muted);
+    cursor: default;
   }
 
   .axis-add {
