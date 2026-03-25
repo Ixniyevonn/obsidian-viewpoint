@@ -31,12 +31,44 @@
 
   const layout = $derived(layoutEngine(project.project, ui.activeDimensionId));
 
+  // --- Helpers ---
+
+  /** Find which group (if any) contains the given world-space point. */
+  function groupAtPoint(wx: number, wy: number): string | null {
+    for (const [groupId, g] of Object.entries(layout.groups)) {
+      if (
+        wx >= g.x &&
+        wx <= g.x + g.width &&
+        wy >= g.y &&
+        wy <= g.y + g.height
+      ) {
+        return groupId;
+      }
+    }
+    return null;
+  }
+
   // --- Canvas callbacks ---
 
   function handleEmptyDblClick(worldX: number, worldY: number) {
-    const id = generateId("note");
-    project.addNote(id, "Untitled");
-    ui.selectNode(id, false);
+    const hitGroup = groupAtPoint(worldX, worldY);
+
+    if (hitGroup) {
+      // Double-clicked inside a group → create node in that group
+      const id = generateId("note");
+      project.addNote(id, "Untitled");
+      if (ui.activeDimensionId && hitGroup !== "__ungrouped") {
+        project.setNoteMembership(id, ui.activeDimensionId, hitGroup);
+      }
+      ui.selectNode(id, false);
+    } else {
+      // Double-clicked true empty space → create a new group
+      if (ui.activeDimensionId) {
+        const groupId = generateId("grp");
+        project.addGroup(ui.activeDimensionId, groupId, "New Group");
+        ui.selectGroup(groupId, false);
+      }
+    }
   }
 
   function handleEmptyClick() {
@@ -51,6 +83,14 @@
     ui.clearPendingDelete();
     ui.clearSelection();
     ui.editingShortId = null;
+  }
+
+  // --- Group selection ---
+
+  function handleGroupSelect(groupId: string, e: MouseEvent) {
+    if (groupId === "__ungrouped") return;
+    ui.clearPendingDelete();
+    ui.selectGroup(groupId, e.shiftKey);
   }
 
   // --- Track cursor in world space + update drag ghost ---
@@ -100,7 +140,6 @@
     if (!dimId) return;
 
     if (groupId === "__ungrouped") {
-      // Create a real group with this name and move all ungrouped nodes into it
       const newGroupId = generateId("grp");
       project.addGroup(dimId, newGroupId, newName);
 
@@ -153,7 +192,7 @@
       } else if (ui.editingShortId || ui.editingLongId) {
         ui.editingShortId = null;
         ui.editingLongId = null;
-      } else if (ui.selectedNodeIds.size > 0) {
+      } else if (ui.hasSelection) {
         ui.clearSelection();
       } else {
         ui.clearFocus();
@@ -162,10 +201,15 @@
     }
 
     if (e.key === "Delete" || e.key === "Backspace") {
-      if (ui.selectedNodeIds.size > 0) {
+      if (ui.hasSelection) {
         e.preventDefault();
         for (const id of ui.selectedNodeIds) {
           project.removeNote(id);
+        }
+        if (ui.activeDimensionId) {
+          for (const gid of ui.selectedGroupIds) {
+            project.removeGroup(ui.activeDimensionId, gid);
+          }
         }
         ui.clearSelection();
       }
@@ -207,9 +251,17 @@
 
     if (e.key === "a" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
-      const allIds = Object.keys(project.project.notes);
-      for (const id of allIds) {
+      const allNodeIds = Object.keys(project.project.notes);
+      for (const id of allNodeIds) {
         ui.selectNode(id, true);
+      }
+      const dim = ui.activeDimensionId
+        ? project.project.dimensions[ui.activeDimensionId]
+        : null;
+      if (dim) {
+        for (const g of dim.groups) {
+          ui.selectGroup(g.id, true);
+        }
       }
       return;
     }
@@ -307,6 +359,8 @@
           height={g.height}
           name={g.name}
           highlight={dropTargetGroupId === groupId}
+          selected={ui.isGroupSelected(groupId)}
+          onSelect={(e) => handleGroupSelect(groupId, e)}
           onRename={ui.activeDimensionId
             ? (newName) => handleGroupRename(groupId, newName)
             : undefined}

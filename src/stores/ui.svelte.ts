@@ -8,6 +8,7 @@ export function createUiStore() {
 
     // Selection
     let selectedNodeIds = $state<Set<string>>(new Set());
+    let selectedGroupIds = $state<Set<string>>(new Set());
 
     // Focus
     let focusPrimaryId = $state<string | null>(null);
@@ -68,7 +69,7 @@ export function createUiStore() {
             activeDimensionId = dimensionIds[next];
         },
 
-        // --- Selection ---
+        // --- Selection (nodes) ---
         get selectedNodeIds() { return selectedNodeIds; },
 
         selectNode(id: string, additive: boolean) {
@@ -79,15 +80,41 @@ export function createUiStore() {
                 selectedNodeIds = next;
             } else {
                 selectedNodeIds = new Set([id]);
+                selectedGroupIds = new Set();
             }
-        },
-
-        clearSelection() {
-            if (selectedNodeIds.size > 0) selectedNodeIds = new Set();
         },
 
         isSelected(id: string) {
             return selectedNodeIds.has(id);
+        },
+
+        // --- Selection (groups) ---
+        get selectedGroupIds() { return selectedGroupIds; },
+
+        selectGroup(id: string, additive: boolean) {
+            if (additive) {
+                const next = new Set(selectedGroupIds);
+                if (next.has(id)) next.delete(id);
+                else next.add(id);
+                selectedGroupIds = next;
+            } else {
+                selectedGroupIds = new Set([id]);
+                selectedNodeIds = new Set();
+            }
+        },
+
+        isGroupSelected(id: string) {
+            return selectedGroupIds.has(id);
+        },
+
+        // --- Selection (shared) ---
+        clearSelection() {
+            if (selectedNodeIds.size > 0) selectedNodeIds = new Set();
+            if (selectedGroupIds.size > 0) selectedGroupIds = new Set();
+        },
+
+        get hasSelection() {
+            return selectedNodeIds.size > 0 || selectedGroupIds.size > 0;
         },
 
         // --- Focus ---
