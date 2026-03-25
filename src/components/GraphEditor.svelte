@@ -65,7 +65,28 @@
 
   function handleKeydown(e: KeyboardEvent) {
     const tag = (e.target as HTMLElement)?.tagName;
-    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    const inInput = tag === "INPUT" || tag === "TEXTAREA";
+
+    // Undo/redo works even from inputs
+    if (e.key === "z" && (e.ctrlKey || e.metaKey) && !e.altKey) {
+      if (e.shiftKey) {
+        e.preventDefault();
+        project.performRedo();
+      } else {
+        e.preventDefault();
+        project.performUndo();
+      }
+      return;
+    }
+
+    // Also support Ctrl+Y for redo
+    if (e.key === "y" && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+      e.preventDefault();
+      project.performRedo();
+      return;
+    }
+
+    if (inInput) return;
 
     if (e.key === "Escape") {
       if (ui.connectingFromId) {

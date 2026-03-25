@@ -34,17 +34,18 @@ export default class DimGraphPlugin extends Plugin {
         await this.saveData(this.settings);
     }
 
+    private getActiveGraphView(): GraphView | null {
+        const leaf = this.app.workspace.activeLeaf;
+        if (leaf?.view instanceof GraphView) return leaf.view;
+        return null;
+    }
+
     async onload() {
         await this.loadSettings();
 
         this.registerView(VIEW_TYPE_GRAPH, (leaf) => new GraphView(leaf, this));
 
         this.registerExtensions(["viewpoint"], VIEW_TYPE_GRAPH);
-        this.addCommand({
-            id: "new-viewpoint",
-            name: "New View",
-            callback: () => this.activateView(),
-        });
 
         this.addRibbonIcon("network", "Viewpoint", () => {
             this.activateView();
@@ -54,6 +55,30 @@ export default class DimGraphPlugin extends Plugin {
             id: "new-viewpoint",
             name: "New View",
             callback: () => this.createNewViewpoint(),
+        });
+
+        this.addCommand({
+            id: "viewpoint-undo",
+            name: "Undo",
+            checkCallback: (checking) => {
+                const view = this.getActiveGraphView();
+                if (!view) return false;
+                if (checking) return view.project.undo.canUndo;
+                view.project.performUndo();
+                return true;
+            },
+        });
+
+        this.addCommand({
+            id: "viewpoint-redo",
+            name: "Redo",
+            checkCallback: (checking) => {
+                const view = this.getActiveGraphView();
+                if (!view) return false;
+                if (checking) return view.project.undo.canRedo;
+                view.project.performRedo();
+                return true;
+            },
         });
 
         this.registerEvent(
@@ -87,7 +112,6 @@ export default class DimGraphPlugin extends Plugin {
         this.app.workspace.revealLeaf(leaf);
     }
 
-    // Creates a new .viewpoint file with proper YAML template
     async createNewViewpoint(folder?: TFolder) {
         try {
             const targetFolder = folder || this.app.fileManager.getNewFileParent(
@@ -106,7 +130,6 @@ export default class DimGraphPlugin extends Plugin {
 
             const file = await this.app.vault.create(filePath, DEFAULT_VIEWPOINT_YAML);
 
-            // Open it immediately in our editor
             const leaf = this.app.workspace.getLeaf(false);
             await leaf.openFile(file);
         } catch (err) {
