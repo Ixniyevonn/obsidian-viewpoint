@@ -1,4 +1,4 @@
-import { ItemView, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
+import { FileView, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 import { mount, unmount } from "svelte";
 import GraphEditor from "../components/GraphEditor.svelte";
 import type DimGraphPlugin from "../main";
@@ -8,11 +8,11 @@ import { deserializeProject, serializeProject } from "../utils/helpers";
 
 export const VIEW_TYPE_GRAPH = "dim-graph-view";
 
-export class GraphView extends ItemView {
+export class GraphView extends FileView {
     component: ReturnType<typeof mount> | null = null;
     plugin: DimGraphPlugin;
     project = createProjectStore();
-    private file: TFile | null = null;
+    file: TFile | null = null;
     private saving = false;
     private unsubscribe: (() => void) | null = null;
 
