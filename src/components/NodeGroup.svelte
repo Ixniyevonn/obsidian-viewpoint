@@ -125,50 +125,68 @@
     onclick={handleBodyClick}
   ></div>
 
-  {#if isEditing}
-    <input
-      bind:this={inputEl}
-      bind:value={editValue}
-      class="group-label-edit"
-      onkeydown={onKeydown}
-      onblur={commit}
-      onclick={(e) => e.stopPropagation()}
-      ondblclick={(e) => e.stopPropagation()}
-    />
-  {:else}
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="group-label" onclick={handleLabelClick} ondblclick={startEdit}>
-      {name}
-      {#if draggable}
-        <span class="drag-indicator" title="Drag to reposition on spectrum"
-          >⠿</span
-        >
-      {/if}
-    </div>
-  {/if}
+  <div class="group-label-wrapper">
+    {#if isEditing}
+      <input
+        bind:this={inputEl}
+        bind:value={editValue}
+        class="group-label-edit"
+        onkeydown={onKeydown}
+        onblur={commit}
+        onclick={(e) => e.stopPropagation()}
+        ondblclick={(e) => e.stopPropagation()}
+      />
+    {:else}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <div
+        class="group-label"
+        onclick={handleLabelClick}
+        ondblclick={startEdit}
+      >
+        {name}
+        {#if draggable}
+          <span class="drag-indicator" title="Drag to reposition on spectrum"
+            >⠿</span
+          >
+        {/if}
+      </div>
+    {/if}
+  </div>
 </Node>
 
 <style>
   :global(.node-group) {
     border: 1px solid var(--background-modifier-border);
     border-radius: var(--radius-m);
-    background: var(--background-secondary);
-    opacity: 0.5;
+    /* Use semi-transparent background instead of opacity on the whole element.
+       This lets the label z-index escape the stacking context. */
+    background: color-mix(
+      in srgb,
+      var(--background-secondary) 50%,
+      transparent
+    );
     pointer-events: none;
     transition:
       border-color 120ms ease,
-      opacity 120ms ease,
       box-shadow 120ms ease;
   }
   :global(.node-group.group-drop-target) {
     border-color: var(--interactive-accent);
-    opacity: 0.75;
+    background: color-mix(
+      in srgb,
+      var(--background-secondary) 75%,
+      transparent
+    );
     border-width: 2px;
   }
   :global(.node-group.group-selected) {
     border-color: var(--interactive-accent);
-    opacity: 0.75;
+    background: color-mix(
+      in srgb,
+      var(--background-secondary) 75%,
+      transparent
+    );
     box-shadow:
       var(--shadow-stationary),
       0 0 0 2px var(--interactive-accent);
@@ -193,9 +211,18 @@
     cursor: grab;
   }
 
-  .group-label {
+  /*
+   * The wrapper is positioned so the label floats above nodes.
+   * pointer-events: none on the wrapper itself so nodes underneath
+   * remain clickable; pointer-events: auto on the label text only.
+   */
+  .group-label-wrapper {
     position: relative;
-    z-index: 1;
+    z-index: 200;
+    pointer-events: none;
+  }
+
+  .group-label {
     padding: 8px 12px;
     font-size: 24px;
     font-weight: 700;
@@ -208,6 +235,11 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    /* Dampened inverse-zoom like Obsidian canvas group names:
+       blends between no compensation and full 1/zoom.
+       zoom=1→1.0, zoom=0.5→~1.3, zoom=0.25→~1.9, zoom=2→~0.85 */
+    transform-origin: top left;
+    transform: scale(calc(0.7 + 0.3 / var(--zoom, 1)));
   }
 
   .drag-indicator {
@@ -218,10 +250,8 @@
   }
 
   .group-label-edit {
-    position: relative;
-    z-index: 1;
-    margin: 8px 12px;
-    padding: 0;
+    display: block;
+    padding: 8px 12px;
     font-size: 24px;
     font-weight: 700;
     font-family: inherit;
@@ -231,8 +261,10 @@
     border-bottom: 2px solid var(--interactive-accent);
     border-radius: 0;
     outline: none;
-    width: calc(100% - 24px);
+    width: 100%;
     pointer-events: auto;
     box-sizing: border-box;
+    transform-origin: top left;
+    transform: scale(calc(0.7 + 0.3 / var(--zoom, 1)));
   }
 </style>
