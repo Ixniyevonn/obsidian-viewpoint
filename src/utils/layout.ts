@@ -18,7 +18,6 @@ export interface GroupLayout {
 export interface LayoutResult {
     nodes: Record<string, NodeLayout>;
     groups: Record<string, GroupLayout>;
-    /** If spectra are active, provides stop positions for the canvas overlay */
     xSpectrum?: SpectrumLayout;
     ySpectrum?: SpectrumLayout;
 }
@@ -27,7 +26,6 @@ export interface SpectrumLayout {
     name: string;
     poles: [string, string];
     stops: { name: string; position: number }[];
-    /** Total extent in pixels along this axis */
     extent: number;
 }
 
@@ -39,23 +37,92 @@ export interface LayoutOptions {
     gridColumns?: number;
 }
 
+// ---------------------------------------------------------------------------
+// Node height estimation
+// ---------------------------------------------------------------------------
+// Previous approach: naive charCount / charsPerLine. Problems:
+//   - Doesn't respect word boundaries (wrap happens at words, not chars)
+//   - Title uses a different (larger) font than body — was using same metric
+//   - Markdown syntax characters were counted as visible width
+//   - No minimum line count for short content with tall line-height
+//   - Padding constant was too small
+//
+// New approach: word-wrap simulation with separate title/body metrics,
+// conservative rounding, and explicit per-section padding.
+
+/** Approximate average character width in px for a given font-size tier. */
+const CHAR_W_TITLE = 10;   // ~h1 at default Obsidian theme ≈ 1.5em
+const CHAR_W_BODY = 7.2;   // ~14px body text
+
+const TITLE_LINE_H = 32;   // line-height for title
+const BODY_LINE_H = 16;    // line-height for body text
+
+const NODE_PAD_TOP = 12;   // padding above title
+const NODE_PAD_MID = 8;    // gap between title and body
+const NODE_PAD_BOTTOM = 16; // padding below body
+
+const NODE_MIN_H = 64;
+
+/**
+ * Estimate how many visual lines a string occupies when word-wrapped
+ * into `maxWidth` pixels with a given average character width.
+ */
+function estimateLines(text: string, maxWidthPx: number, charW: number): number {
+    if (!text) return 0;
+
+    const charsPerLine = Math.max(1, Math.floor(maxWidthPx / charW));
+    const paragraphs = text.split(/\n/);
+    let lines = 0;
+
+    for (const para of paragraphs) {
+        if (para.trim() === "") {
+            lines += 1; // blank line
+            continue;
+        }
+        const words = para.split(/\s+/).filter(Boolean);
+        let lineLen = 0;
+        let paraLines = 1;
+
+        for (const word of words) {
+            // Strip common markdown syntax from width calc
+            const visLen = word.replace(/[*_~`#\[\]()]/g, "").length;
+            if (lineLen === 0) {
+                lineLen = visLen;
+            } else if (lineLen + 1 + visLen > charsPerLine) {
+                paraLines++;
+                lineLen = visLen;
+            } else {
+                lineLen += 1 + visLen;
+            }
+        }
+        lines += paraLines;
+    }
+
+    return Math.max(1, lines);
+}
+
 function estimateNodeHeight(
     title: string,
     short: string,
     contentWidth: number,
 ): number {
-    const charPerLine = Math.max(1, Math.floor(contentWidth / 8));
-    const titleLines = Math.max(1, Math.ceil(title.length / (charPerLine * 0.6)));
-    const textLines = short ? Math.ceil(short.length / charPerLine) : 0;
-    const titleHeight = titleLines * 28;
-    const textHeight = textLines * 22;
-    const padding = 48;
-    return Math.max(60, padding + titleHeight + textHeight);
+    const titleLines = estimateLines(title, contentWidth, CHAR_W_TITLE);
+    const titleH = titleLines * TITLE_LINE_H;
+
+    let bodyH = 0;
+    if (short) {
+        const bodyLines = estimateLines(short, contentWidth, CHAR_W_BODY);
+        bodyH = bodyLines * BODY_LINE_H;
+    }
+
+    const total = NODE_PAD_TOP + titleH + (short ? NODE_PAD_MID + bodyH : 0) + NODE_PAD_BOTTOM;
+    return Math.max(NODE_MIN_H, total);
 }
 
-/**
- * Build undirected adjacency between groups based on inter-group connections.
- */
+// ---------------------------------------------------------------------------
+// Group adjacency / BFS (unchanged logic)
+// ---------------------------------------------------------------------------
+
 function buildGroupAdjacency(
     connections: Connection[],
     notes: ProjectData["notes"],
@@ -198,22 +265,54 @@ function computeGroupPlacements(
     return placement;
 }
 
+// ---------------------------------------------------------------------------
+// Helper: place nodes inside a group and return the group's actual height
+// ---------------------------------------------------------------------------
+
+const LABEL_H = 40;
+
 /**
- * Compute pixel position for a stop index within a spectrum.
- * 0% = first stop, 100% = last stop.
- * Returns center position for the group at that stop.
+ * Lay out `members` vertically inside a group starting at (gx, gy).
+ * Writes into `result.nodes` and returns the computed group height
+ * that exactly wraps all children with proper padding.
  */
-function stopPosition(
-    stopIndex: number,
-    totalStops: number,
-    extent: number,
-    groupSize: number,
-    margin: number,
+function placeNodesInGroup(
+    members: string[],
+    gx: number,
+    gy: number,
+    nodeWidth: number,
+    nodeGap: number,
+    groupPadding: number,
+    heightOf: (id: string) => number,
+    result: LayoutResult,
 ): number {
-    if (totalStops <= 1) return margin;
-    const usable = extent - margin * 2 - groupSize;
-    return margin + (stopIndex / (totalStops - 1)) * usable;
+    if (members.length === 0) {
+        return LABEL_H + groupPadding * 2;
+    }
+
+    const startY = gy + LABEL_H + groupPadding;
+    let cursorY = startY;
+
+    for (const noteId of members) {
+        const h = heightOf(noteId);
+        result.nodes[noteId] = {
+            x: gx + groupPadding,
+            y: cursorY,
+            width: nodeWidth,
+            height: h,
+        };
+        cursorY += h + nodeGap;
+    }
+
+    // Group height = from group top to last node bottom + padding
+    // cursorY currently points past the last nodeGap, subtract it, add bottom padding
+    const groupHeight = (cursorY - nodeGap) - gy + groupPadding;
+    return groupHeight;
 }
+
+// ---------------------------------------------------------------------------
+// Main layout engine
+// ---------------------------------------------------------------------------
 
 export function layoutEngine(
     project: ProjectData,
@@ -231,7 +330,6 @@ export function layoutEngine(
     const contentWidth = nodeWidth - 32;
     const result: LayoutResult = { nodes: {}, groups: {} };
     const noteIds = Object.keys(project.notes);
-    // if (!noteIds.length) return result;
 
     function heightOf(id: string): number {
         const note = project.notes[id];
@@ -285,48 +383,30 @@ export function layoutEngine(
         }
     }
 
-    const LABEL_H = 40;
     const groupWidth = nodeWidth + groupPadding * 2;
 
     const xSpec = dim["x-spectrum"] as Spectrum | undefined;
     const ySpec = dim["y-spectrum"] as Spectrum | undefined;
     const hasSpectra = !!xSpec || !!ySpec;
 
-    // ========================================================================
-    // SPECTRUM LAYOUT
-    // ========================================================================
     if (hasSpectra) {
         return layoutWithSpectra(
-            project,
-            activeDimensionId,
-            dim,
-            buckets,
-            ungrouped,
-            noteIds,
-            xSpec ?? null,
-            ySpec ?? null,
-            nodeWidth,
-            nodeGap,
-            groupGap,
-            groupPadding,
-            LABEL_H,
-            groupWidth,
-            contentWidth,
+            project, activeDimensionId, dim,
+            buckets, ungrouped,
+            xSpec ?? null, ySpec ?? null,
+            nodeWidth, nodeGap, groupGap, groupPadding, groupWidth, contentWidth,
         );
     }
 
-    // ========================================================================
-    // ORIGINAL BFS ADJACENCY LAYOUT (no spectra)
-    // ========================================================================
+    // ======================================================================
+    // BFS ADJACENCY LAYOUT (no spectra)
+    // ======================================================================
     const allGroupIds = dim.groups.map((g) => g.id);
     if (ungrouped.length) allGroupIds.push("__ungrouped");
 
     const connections = project.connections[activeDimensionId] || [];
     const adj = buildGroupAdjacency(
-        connections,
-        project.notes,
-        activeDimensionId,
-        new Set(allGroupIds),
+        connections, project.notes, activeDimensionId, new Set(allGroupIds),
     );
     const placements = computeGroupPlacements(adj, allGroupIds);
 
@@ -336,10 +416,7 @@ export function layoutEngine(
     const columns = new Map<number, string[]>();
     for (const [id, p] of placements) {
         let list = columns.get(p.col);
-        if (!list) {
-            list = [];
-            columns.set(p.col, list);
-        }
+        if (!list) { list = []; columns.set(p.col, list); }
         list.push(id);
     }
     for (const ids of columns.values()) {
@@ -361,28 +438,15 @@ export function layoutEngine(
                     ? "Ungrouped"
                     : (dim.groups.find((g) => g.id === groupId)?.name ?? "");
 
-            let innerY = cursorY + LABEL_H + groupPadding;
-            for (const noteId of members) {
-                const h = heightOf(noteId);
-                result.nodes[noteId] = {
-                    x: x + groupPadding,
-                    y: innerY,
-                    width: nodeWidth,
-                    height: h,
-                };
-                innerY += h + nodeGap;
-            }
-
-            const gh =
-                members.length > 0
-                    ? innerY - cursorY - nodeGap + groupPadding
-                    : LABEL_H + groupPadding * 2;
+            const gh = placeNodesInGroup(
+                members, x, cursorY,
+                nodeWidth, nodeGap, groupPadding,
+                heightOf, result,
+            );
 
             result.groups[groupId] = {
-                x,
-                y: cursorY,
-                width: groupWidth,
-                height: gh,
+                x, y: cursorY,
+                width: groupWidth, height: gh,
                 name: groupName,
             };
 
@@ -393,20 +457,22 @@ export function layoutEngine(
     return result;
 }
 
+// ---------------------------------------------------------------------------
+// Spectrum layout
+// ---------------------------------------------------------------------------
+
 function layoutWithSpectra(
     project: ProjectData,
     dimId: string,
     dim: ProjectData["dimensions"][string],
     buckets: Record<string, string[]>,
     ungrouped: string[],
-    _noteIds: string[],
     xSpec: Spectrum | null,
     ySpec: Spectrum | null,
     nodeWidth: number,
     nodeGap: number,
     groupGap: number,
     groupPadding: number,
-    LABEL_H: number,
     groupWidth: number,
     contentWidth: number,
 ): LayoutResult {
@@ -417,12 +483,19 @@ function layoutWithSpectra(
         return estimateNodeHeight(note.title, note.short, contentWidth);
     }
 
+    /**
+     * Compute exact group content height by summing actual node heights.
+     * This must match what placeNodesInGroup will produce.
+     */
     function groupContentHeight(members: string[]): number {
-        let h = LABEL_H + groupPadding;
+        if (members.length === 0) return LABEL_H + groupPadding * 2;
+        let h = LABEL_H + groupPadding; // top: label + top padding
         for (const noteId of members) {
             h += heightOf(noteId) + nodeGap;
         }
-        return members.length > 0 ? h - nodeGap + groupPadding : LABEL_H + groupPadding * 2;
+        // Remove trailing gap, add bottom padding
+        h = h - nodeGap + groupPadding;
+        return h;
     }
 
     const xStopIndex = new Map<string, number>();
@@ -433,16 +506,12 @@ function layoutWithSpectra(
     const xStopCount = xSpec ? xSpec.stops.length : 1;
     const yStopCount = ySpec ? ySpec.stops.length : 1;
 
-    // Pre-compute group heights to determine per-row max height
-    // Grid: xStopCount columns × yStopCount rows
-    // Groups without stop assignment go to a separate "unplaced" area
-
     interface GroupInfo {
         id: string;
         name: string;
         members: string[];
-        xIdx: number; // -1 = unplaced
-        yIdx: number; // -1 = unplaced
+        xIdx: number;
+        yIdx: number;
         contentH: number;
     }
 
@@ -452,32 +521,24 @@ function layoutWithSpectra(
         const xIdx = g.x && xStopIndex.has(g.x) ? xStopIndex.get(g.x)! : (xSpec ? -1 : 0);
         const yIdx = g.y && yStopIndex.has(g.y) ? yStopIndex.get(g.y)! : (ySpec ? -1 : 0);
         groups.push({
-            id: g.id,
-            name: g.name,
-            members,
-            xIdx,
-            yIdx,
+            id: g.id, name: g.name, members,
+            xIdx, yIdx,
             contentH: groupContentHeight(members),
         });
     }
 
-    // Add ungrouped bucket
     if (ungrouped.length) {
         groups.push({
-            id: "__ungrouped",
-            name: "Ungrouped",
-            members: ungrouped,
-            xIdx: -1,
-            yIdx: -1,
+            id: "__ungrouped", name: "Ungrouped", members: ungrouped,
+            xIdx: -1, yIdx: -1,
             contentH: groupContentHeight(ungrouped),
         });
     }
 
-    // Separate placed vs unplaced groups
     const placed = groups.filter((g) => g.xIdx >= 0 && g.yIdx >= 0);
     const unplaced = groups.filter((g) => g.xIdx < 0 || g.yIdx < 0);
 
-    // Build grid: cell -> list of groups at that position
+    // Build grid: cell -> stacked groups
     const grid = new Map<string, GroupInfo[]>();
     for (const g of placed) {
         const key = `${g.xIdx},${g.yIdx}`;
@@ -486,25 +547,24 @@ function layoutWithSpectra(
         grid.set(key, list);
     }
 
-    // Compute per-column width (all same) and per-row max height
+    // Per-row max height: compute from actual stacked cell heights
     const rowMaxH = new Array(yStopCount).fill(LABEL_H + groupPadding * 2);
-    for (const g of placed) {
-        const cellKey = `${g.xIdx},${g.yIdx}`;
-        // Stack groups at same cell, so sum their heights
-        const cellGroups = grid.get(cellKey) || [];
-        let totalH = 0;
-        for (const cg of cellGroups) totalH += cg.contentH + groupGap;
-        totalH -= groupGap;
-        rowMaxH[g.yIdx] = Math.max(rowMaxH[g.yIdx], totalH);
+    for (let r = 0; r < yStopCount; r++) {
+        for (let c = 0; c < xStopCount; c++) {
+            const cellGroups = grid.get(`${c},${r}`);
+            if (!cellGroups || cellGroups.length === 0) continue;
+            let totalH = 0;
+            for (const cg of cellGroups) totalH += cg.contentH + groupGap;
+            totalH -= groupGap; // no trailing gap
+            rowMaxH[r] = Math.max(rowMaxH[r], totalH);
+        }
     }
 
-    // Compute row Y positions and column X positions
     const SPECTRUM_MARGIN = 80;
     const colWidth = groupWidth;
 
-    // Total extent
     const xExtent = Math.max(
-        (xStopCount) * (colWidth + groupGap) - groupGap + SPECTRUM_MARGIN * 2,
+        xStopCount * (colWidth + groupGap) - groupGap + SPECTRUM_MARGIN * 2,
         colWidth + SPECTRUM_MARGIN * 2,
     );
     const totalRowH = rowMaxH.reduce((a, b) => a + b, 0) + (yStopCount - 1) * groupGap;
@@ -513,7 +573,6 @@ function layoutWithSpectra(
         LABEL_H + groupPadding * 2 + SPECTRUM_MARGIN * 2,
     );
 
-    // Row Y offsets
     const rowY: number[] = [];
     let yAccum = SPECTRUM_MARGIN;
     for (let r = 0; r < yStopCount; r++) {
@@ -521,61 +580,58 @@ function layoutWithSpectra(
         yAccum += rowMaxH[r] + groupGap;
     }
 
-    // Column X offsets
     const colX: number[] = [];
     for (let c = 0; c < xStopCount; c++) {
         colX.push(SPECTRUM_MARGIN + c * (colWidth + groupGap));
     }
 
-    // Place groups on the grid
-    // Track per-cell Y cursor for stacking multiple groups in same cell
+    // Place groups on grid
     const cellCursor = new Map<string, number>();
 
     for (const g of placed) {
         const cellKey = `${g.xIdx},${g.yIdx}`;
-        let cellY = cellCursor.get(cellKey) ?? rowY[g.yIdx];
+        const cellY = cellCursor.get(cellKey) ?? rowY[g.yIdx];
         const gx = colX[g.xIdx];
 
-        placeGroup(g, gx, cellY);
-        cellCursor.set(cellKey, cellY + g.contentH + groupGap);
+        const gh = placeNodesInGroup(
+            g.members, gx, cellY,
+            nodeWidth, nodeGap, groupPadding,
+            heightOf, result,
+        );
+
+        result.groups[g.id] = {
+            x: gx, y: cellY,
+            width: colWidth, height: gh,
+            name: g.name,
+        };
+
+        cellCursor.set(cellKey, cellY + gh + groupGap);
     }
 
-    // Place unplaced groups below the spectrum grid
+    // Place unplaced groups below the grid
     let unplacedY = yAccum + groupGap;
     let unplacedX = SPECTRUM_MARGIN;
     for (const g of unplaced) {
-        placeGroup(g, unplacedX, unplacedY);
-        unplacedX += colWidth + groupGap;
-        // Wrap after a few columns
-        if (unplacedX > xExtent - colWidth) {
-            unplacedX = SPECTRUM_MARGIN;
-            unplacedY += g.contentH + groupGap;
-        }
-    }
-
-    function placeGroup(g: GroupInfo, gx: number, gy: number) {
-        let innerY = gy + LABEL_H + groupPadding;
-        for (const noteId of g.members) {
-            const h = heightOf(noteId);
-            result.nodes[noteId] = {
-                x: gx + groupPadding,
-                y: innerY,
-                width: nodeWidth,
-                height: h,
-            };
-            innerY += h + nodeGap;
-        }
+        const gh = placeNodesInGroup(
+            g.members, unplacedX, unplacedY,
+            nodeWidth, nodeGap, groupPadding,
+            heightOf, result,
+        );
 
         result.groups[g.id] = {
-            x: gx,
-            y: gy,
-            width: colWidth,
-            height: g.contentH,
+            x: unplacedX, y: unplacedY,
+            width: colWidth, height: gh,
             name: g.name,
         };
+
+        unplacedX += colWidth + groupGap;
+        if (unplacedX > xExtent - colWidth) {
+            unplacedX = SPECTRUM_MARGIN;
+            unplacedY += gh + groupGap;
+        }
     }
 
-    // Build spectrum layout info for the canvas overlay
+    // Spectrum overlay info
     if (xSpec) {
         result.xSpectrum = {
             name: xSpec.name,
