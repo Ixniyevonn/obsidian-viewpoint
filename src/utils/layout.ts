@@ -231,7 +231,7 @@ export function layoutEngine(
     const contentWidth = nodeWidth - 32;
     const result: LayoutResult = { nodes: {}, groups: {} };
     const noteIds = Object.keys(project.notes);
-    if (!noteIds.length) return result;
+    // if (!noteIds.length) return result;
 
     function heightOf(id: string): number {
         const note = project.notes[id];

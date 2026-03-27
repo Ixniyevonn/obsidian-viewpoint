@@ -1,16 +1,23 @@
 import type { ProjectData, Spectrum } from "../types";
 import { createUndoManager } from "./undo";
 
-function emptyProject(): ProjectData {
+export function emptyProject(): ProjectData {
     return {
         meta: {
             name: "Untitled",
             created: new Date().toISOString(),
             modified: new Date().toISOString(),
         },
-        dimensions: {},
+        dimensions: {
+            default: {
+                name: "Default",
+                groups: [],
+            },
+        },
         notes: {},
-        connections: {},
+        connections: {
+            default: [],
+        },
         node_order: {},
     };
 }

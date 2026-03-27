@@ -1,4 +1,6 @@
 import { Menu, normalizePath, Notice, Plugin, TFolder } from "obsidian";
+import { emptyProject } from "./stores/project.svelte";
+import { serializeProject } from "./utils/helpers";
 import { GraphView, VIEW_TYPE_GRAPH } from "./views/GraphView";
 
 interface DimGraphSettings {
@@ -10,18 +12,6 @@ const DEFAULT_SETTINGS: DimGraphSettings = {
     lastOpenedFile: null,
     defaultDimension: null,
 };
-
-const DEFAULT_VIEWPOINT_YAML = `meta:
-  name: New World
-  created: ${new Date().toISOString()}
-  modified: ${new Date().toISOString()}
-dimensions:
-  personal:
-    name: Personal
-    groups: []
-notes: {}
-connections: {}
-node-order: {}`;
 
 export default class DimGraphPlugin extends Plugin {
     settings!: DimGraphSettings;
@@ -53,7 +43,7 @@ export default class DimGraphPlugin extends Plugin {
 
         this.addCommand({
             id: "new-viewpoint",
-            name: "New View",
+            name: "New viewpoint",
             callback: () => this.createNewViewpoint(),
         });
 
@@ -86,9 +76,9 @@ export default class DimGraphPlugin extends Plugin {
                 if (file instanceof TFolder) {
                     menu.addItem((item) => {
                         item
-                            .setTitle("New View")
-                            .setIcon("git-branch")
-                            .setSection("new")
+                            .setTitle("New viewpoint")
+                            .setIcon("network")
+                            .setSection('action-primary')
                             .onClick(() => this.createNewViewpoint(file));
                     });
                 }
@@ -128,13 +118,15 @@ export default class DimGraphPlugin extends Plugin {
                 counter++;
             }
 
-            const file = await this.app.vault.create(filePath, DEFAULT_VIEWPOINT_YAML);
+            const data = emptyProject();
+            const yml = serializeProject(data);
+            const file = await this.app.vault.create(filePath, yml);
 
             const leaf = this.app.workspace.getLeaf(false);
             await leaf.openFile(file);
         } catch (err) {
             console.error(err);
-            new Notice("Failed to create new View file");
+            new Notice("Failed to create new Viewpoint file");
         }
     }
 }

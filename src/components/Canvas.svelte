@@ -7,7 +7,6 @@
     onEmptyDblClick?: (worldX: number, worldY: number) => void;
     onEmptyClick?: () => void;
   }
-
   const {
     children,
     minZoom = 0.1,
@@ -24,6 +23,7 @@
 
   // Pan state
   let isPanning = false;
+  let panButton = -1;
   let panStartX = 0;
   let panStartY = 0;
   let panOriginX = 0;
@@ -43,7 +43,6 @@
 
   function isEmptySpace(target: EventTarget | null): boolean {
     if (!containerEl) return false;
-    // The viewport itself or the world layer (which has no intrinsic clickable area)
     return target === containerEl;
   }
 
@@ -53,59 +52,80 @@
 
     if (!isMiddle && !isLeftOnEmpty) return;
 
-    e.preventDefault();
-    isPanning = true;
+    if (isMiddle) {
+      e.preventDefault();
+      containerEl?.setPointerCapture(e.pointerId);
+    }
+
+    // CRITICAL CHANGE: left-click on empty background does NOT start panning yet
+    // This lets the browser properly synthesize the native dblclick event
+    isPanning = false;
+    panButton = e.button;
     didMove = false;
     panStartX = e.clientX;
     panStartY = e.clientY;
     panOriginX = panX;
     panOriginY = panY;
-    containerEl?.setPointerCapture(e.pointerId);
   }
 
   function onPointerMove(e: PointerEvent) {
-    if (!isPanning) return;
+    if (panButton === -1) return;
+
     const dx = e.clientX - panStartX;
     const dy = e.clientY - panStartY;
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) didMove = true;
-    panX = panOriginX + dx;
-    panY = panOriginY + dy;
+
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+      didMove = true;
+      isPanning = true; // only become a drag after small movement threshold
+    }
+
+    if (isPanning) {
+      panX = panOriginX + dx;
+      panY = panOriginY + dy;
+    }
   }
 
   function onPointerUp(e: PointerEvent) {
-    if (!isPanning) return;
-    const wasPanning = isPanning;
-    isPanning = false;
-    containerEl?.releasePointerCapture(e.pointerId);
+    if (panButton === -1) return;
 
-    // Left click on empty space without dragging → notify parent
-    if (wasPanning && !didMove && e.button === 0) {
+    if (panButton === 1 && containerEl) {
+      containerEl.releasePointerCapture(e.pointerId);
+    }
+
+    // Single-click on empty space (no movement happened)
+    if (panButton === 0 && !didMove && !isPanning && isEmptySpace(e.target)) {
       onEmptyClick?.();
     }
+
+    isPanning = false;
+    panButton = -1;
+  }
+
+  function onDblClick(e: MouseEvent) {
+    // Native dblclick now fires reliably for:
+    //   • pure empty background
+    //   • background of a group (click-catcher does not stop dblclick)
+    const world = toWorld(e.clientX, e.clientY);
+    onEmptyDblClick?.(world.x, world.y);
   }
 
   function onWheel(e: WheelEvent) {
     if (!e.ctrlKey) return;
     e.preventDefault();
-
     const rect = containerEl!.getBoundingClientRect();
     const cx = e.clientX - rect.left;
     const cy = e.clientY - rect.top;
-
     const oldZoom = zoom;
     const delta = -e.deltaY * zoomSpeed;
     const newZoom = Math.min(maxZoom, Math.max(minZoom, oldZoom * (1 + delta)));
-
     const scale = newZoom / oldZoom;
     panX = cx - scale * (cx - panX);
     panY = cy - scale * (cy - panY);
     zoom = newZoom;
   }
 
-  function onDblClick(e: MouseEvent) {
-    if (!isEmptySpace(e.target)) return;
-    const world = toWorld(e.clientX, e.clientY);
-    onEmptyDblClick?.(world.x, world.y);
+  function onAuxClick(e: MouseEvent) {
+    if (e.button === 1) e.preventDefault();
   }
 
   /** Programmatic: smoothly pan so world-space (wx, wy) is at container center */
@@ -120,19 +140,16 @@
     const z = targetZoom ?? zoom;
     const targetPanX = rect.width / 2 - wx * z;
     const targetPanY = rect.height / 2 - wy * z;
-
     if (durationMs <= 0) {
       panX = targetPanX;
       panY = targetPanY;
       zoom = z;
       return;
     }
-
     const startPanX = panX;
     const startPanY = panY;
     const startZoom = zoom;
     const start = performance.now();
-
     function tick(now: number) {
       const t = Math.min(1, (now - start) / durationMs);
       const ease = 1 - (1 - t) * (1 - t);
@@ -150,10 +167,6 @@
 
   export function clientToWorld(clientX: number, clientY: number) {
     return toWorld(clientX, clientY);
-  }
-
-  function onAuxClick(e: MouseEvent) {
-    if (e.button === 1) e.preventDefault();
   }
 </script>
 
@@ -190,7 +203,7 @@
     position: relative;
     cursor: grab;
     touch-action: none;
-
+    user-select: none;
     background-color: var(--background-primary);
     background-image: radial-gradient(
       circle,

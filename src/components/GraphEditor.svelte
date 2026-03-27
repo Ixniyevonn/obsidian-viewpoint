@@ -93,33 +93,34 @@
   // --- Canvas callbacks ---
 
   function handleEmptyDblClick(worldX: number, worldY: number) {
+    if (!ui.activeDimensionId) return;
+
     const hitGroup = groupAtPoint(worldX, worldY);
 
     if (hitGroup) {
       const id = generateId("note");
       project.addNote(id, "Untitled");
-      if (ui.activeDimensionId && hitGroup !== "__ungrouped") {
+      if (hitGroup !== "__ungrouped") {
         project.setNoteMembership(id, ui.activeDimensionId, hitGroup);
       }
       ui.selectNode(id, false);
     } else {
-      if (ui.activeDimensionId) {
-        const groupId = generateId("grp");
-        project.addGroup(ui.activeDimensionId, groupId, "New Group");
+      // No group hit — create a new group at this position
+      const groupId = generateId("grp");
+      project.addGroup(ui.activeDimensionId, groupId, "New Group");
 
-        if (hasSpectra && ui.activeDimensionId) {
-          const xStop = findNearestXStop(worldX);
-          const yStop = findNearestYStop(worldY);
-          if (xStop !== null) {
-            project.setGroupStop(ui.activeDimensionId, groupId, "x", xStop);
-          }
-          if (yStop !== null) {
-            project.setGroupStop(ui.activeDimensionId, groupId, "y", yStop);
-          }
+      if (hasSpectra) {
+        const xStop = findNearestXStop(worldX);
+        const yStop = findNearestYStop(worldY);
+        if (xStop !== null) {
+          project.setGroupStop(ui.activeDimensionId, groupId, "x", xStop);
         }
-
-        ui.selectGroup(groupId, false);
+        if (yStop !== null) {
+          project.setGroupStop(ui.activeDimensionId, groupId, "y", yStop);
+        }
       }
+
+      ui.selectGroup(groupId, false);
     }
   }
 
@@ -412,7 +413,8 @@
   // --- Scroll-wheel axis switching ---
 
   function onWheel(e: WheelEvent) {
-    if (e.ctrlKey) return;
+    // Don't cycle dimensions when dialog is open or ctrl-zooming
+    if (e.ctrlKey || dialogMode) return;
     const dimIds = Object.keys(project.project.dimensions);
     if (!dimIds.length) return;
     e.preventDefault();
