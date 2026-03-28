@@ -110,20 +110,18 @@
     if (isRetargeting && !isRetargetAnchor) {
       e.stopPropagation();
       const rDimId = ui.retargetDimId;
-      const rIdx = ui.retargetIndex;
       const rEnd = ui.retargetEnd;
       const rAnchor = ui.retargetAnchorId;
+      const rOriginalId = ui.retargetOriginalId; // ← was missing
       const rLabel = ui.retargetLabel;
-      if (
-        rDimId !== null &&
-        rIdx !== null &&
-        rEnd !== null &&
-        rAnchor !== null
-      ) {
-        project.removeConnection(rDimId, rIdx);
+
+      if (rDimId && rEnd && rAnchor && rOriginalId !== null) {
+        // Remove old connection (new from/to signature)
         if (rEnd === "target") {
+          project.removeConnection(rDimId, rAnchor, rOriginalId);
           project.addConnection(rDimId, rAnchor, noteId, rLabel);
         } else {
+          project.removeConnection(rDimId, rOriginalId, rAnchor);
           project.addConnection(rDimId, noteId, rAnchor, rLabel);
         }
       }

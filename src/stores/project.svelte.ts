@@ -15,9 +15,7 @@ export function emptyProject(): ProjectData {
             },
         },
         notes: {},
-        connections: {
-            default: [],
-        },
+
         node_order: {},
     };
 }
@@ -31,24 +29,29 @@ export function createProjectStore() {
         for (const fn of listeners) fn();
     }
 
-    /** Snapshot before a discrete action (always new undo entry). */
-    function snap() {
-        undo.fence();
-        undo.snapshot(project);
-    }
-
-    /** Snapshot before a continuous/mergeable edit (typing). */
-    function merge() {
-        undo.snapshot(project);
-    }
-
+    function snap() { undo.fence(); undo.snapshot(project); }
+    function merge() { undo.snapshot(project); }
     function touch() {
         project.meta.modified = new Date().toISOString();
+    }
+
+    function getConnections(dimId: string) {
+        if (!dimId) return [];
+        const result: { from: string; to: string; label: string | null }[] = [];
+        for (const [fromId, note] of Object.entries(project.notes)) {
+            const outgoing = note.connections?.[dimId] ?? [];
+            for (const c of outgoing) {
+                result.push({ from: fromId, to: c.to, label: c.label });
+            }
+        }
+        return result;
     }
 
     return {
         get project() { return project; },
         get undo() { return undo; },
+
+        getConnections,
 
         subscribe(fn: () => void) {
             listeners.push(fn);
@@ -91,24 +94,26 @@ export function createProjectStore() {
 
         addNote(id: string, title: string) {
             snap();
-            project.notes[id] = { title, short: "", long: "", membership: {} };
+            project.notes[id] = {
+                title,
+                short: "",
+                long: "",
+                membership: {},
+                connections: {},
+            };
             touch(); notify();
-            return project;
         },
 
         removeNote(id: string) {
             snap();
             delete project.notes[id];
-            for (const dimId of Object.keys(project.connections)) {
-                project.connections[dimId] = project.connections[dimId].filter(
-                    (c) => c.from !== id && c.to !== id
-                );
-            }
-            for (const key of Object.keys(project.node_order)) {
-                project.node_order[key] = project.node_order[key].filter((n) => n !== id);
+            // Clean up any incoming references (optional but clean)
+            for (const note of Object.values(project.notes)) {
+                for (const dimId of Object.keys(note.connections)) {
+                    note.connections[dimId] = note.connections[dimId].filter(c => c.to !== id);
+                }
             }
             touch(); notify();
-            return project;
         },
 
         updateNodeTitle(id: string, title: string) {
@@ -149,7 +154,6 @@ export function createProjectStore() {
             if (xSpectrum) dim["x-spectrum"] = xSpectrum;
             if (ySpectrum) dim["y-spectrum"] = ySpectrum;
             project.dimensions[id] = dim;
-            project.connections[id] = [];
             touch(); notify();
             return project;
         },
@@ -157,7 +161,6 @@ export function createProjectStore() {
         removeDimension(id: string) {
             snap();
             delete project.dimensions[id];
-            delete project.connections[id];
             for (const note of Object.values(project.notes)) {
                 delete note.membership[id];
             }
@@ -265,29 +268,29 @@ export function createProjectStore() {
 
         addConnection(dimensionId: string, from: string, to: string, label: string | null = null) {
             snap();
-            if (!project.connections[dimensionId]) project.connections[dimensionId] = [];
-            project.connections[dimensionId].push({ from, to, label });
+            const note = project.notes[from];
+            if (!note) return;
+            if (!note.connections[dimensionId]) note.connections[dimensionId] = [];
+            note.connections[dimensionId].push({ to, label });
             touch(); notify();
-            return project;
         },
 
-        removeConnection(dimensionId: string, index: number) {
+        /** Remove a specific connection by from→to (more robust than index) */
+        removeConnection(dimensionId: string, from: string, to: string) {
             snap();
-            if (project.connections[dimensionId]) {
-                project.connections[dimensionId].splice(index, 1);
-            }
+            const note = project.notes[from];
+            if (!note?.connections?.[dimensionId]) return;
+            note.connections[dimensionId] = note.connections[dimensionId].filter(c => c.to !== to);
             touch(); notify();
-            return project;
         },
 
-        updateConnectionLabel(dimensionId: string, index: number, label: string | null) {
+        updateConnectionLabel(dimensionId: string, from: string, to: string, label: string | null) {
             merge();
-            const conns = project.connections[dimensionId];
-            if (conns && conns[index]) {
-                conns[index].label = label;
-            }
+            const note = project.notes[from];
+            if (!note?.connections?.[dimensionId]) return;
+            const conn = note.connections[dimensionId].find(c => c.to === to);
+            if (conn) conn.label = label;
             touch(); notify();
-            return project;
         },
 
         // --- Node Order ---
@@ -302,3 +305,4 @@ export function createProjectStore() {
 }
 
 export type ProjectStore = ReturnType<typeof createProjectStore>;
+

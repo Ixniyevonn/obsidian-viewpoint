@@ -164,44 +164,35 @@ Single YAML file. All data deterministically serializable. Optimized for LLM rea
 
 ```yaml
 meta:
-  name: string # World/project name
-  created: ISO-8601 date
-  modified: ISO-8601 date
+  name: string
+  created: ISO-8601
+  modified: ISO-8601
 
 dimensions:
   <dimension-id>:
     name: string
-    x-spectrum: # optional
-      name: string
-      poles: [string, string] # e.g. ["individual", "collective"]
-      stops: [string, ...] # ordered from first pole to second
-    y-spectrum: # optional
-      name: string
-      poles: [string, string]
-      stops: [string, ...]
-    groups:
-      - id: string
-        name: string
-        x: string | null # stop name from x-spectrum
-        y: string | null # stop name from y-spectrum
+    x-spectrum?: Spectrum
+    y-spectrum?: Spectrum
+    groups: Group[]
 
 notes:
   <note-id>:
-    title: string # title
-    short: string # short-form visible in graph
-    long: string # full markdown content
+    title: string
+    short: string
+    long: string
     membership:
       <dimension-id>: <group-id> | null
+    connections:
+      <dimension-id>:
+        - to: <note-id>
+          label: string | null
+        - to: <another-note-id>
+          label: "trained by"
+        ...
 
-connections:
-  <dimension-id>:
-    - from: <note-id>
-      to: <note-id>
-      label: string | null
-
-node_order: # controls vertical order within groups
-  "<dimension-id>:<group-id>": [<note-id>, ...]
-  "<dimension-id>:ungrouped": [<note-id>, ...]
+node_order:
+  "<dimension-id>:<group-id>": [note-id, ...]
+  "<dimension-id>:ungrouped": [note-id, ...]
 ```
 
 ### Format Rationale

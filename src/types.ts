@@ -18,11 +18,17 @@ export interface Dimension {
     groups: Group[];
 }
 
+export interface ConnectionOutgoing {
+    to: string;
+    label: string | null;
+}
+
 export interface Note {
     title: string;
     short: string;
     long: string;
-    membership: Record<string, string | null>; // dimensionId -> groupId | null
+    membership: Record<string, string | null>;
+    connections: Record<string, { to: string; label: string | null }[]>;
 }
 
 export interface Connection {
@@ -41,8 +47,7 @@ export interface ProjectData {
     meta: ProjectMeta;
     dimensions: Record<string, Dimension>;
     notes: Record<string, Note>;
-    connections: Record<string, Connection[]>; // dimensionId -> connections
-    node_order: Record<string, string[]>; // "dimensionId:groupId" -> noteIds
+    node_order: Record<string, string[]>;
 }
 
 // Runtime UI state (not serialized)

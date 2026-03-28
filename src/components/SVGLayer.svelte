@@ -14,7 +14,8 @@
   const { project, ui, layout }: Props = $props();
 
   // --- Label editing state ---
-  let editingIndex = $state<number | null>(null);
+  let editingFrom = $state<string | null>(null);
+  let editingTo = $state<string | null>(null);
   let editValue = $state("");
   let editX = $state(0);
   let editY = $state(0);
@@ -69,7 +70,7 @@
 
   const edges: Edge[] = $derived.by(() => {
     if (!dimId) return [];
-    const conns = project.project.connections[dimId] || [];
+    const conns = project.getConnections(dimId); // ← changed
     const result: Edge[] = [];
     const occurrences = new Map<string, number>();
 
@@ -85,7 +86,7 @@
 
       const edge = buildEdge(
         `${dimId}:${pairKey}:${occ}`,
-        i,
+        i, // still used internally for UI only
         conn.from,
         conn.to,
         conn.label,
@@ -279,7 +280,8 @@
   // --- Label editing ---
 
   function startEditing(edge: Edge) {
-    editingIndex = edge.index;
+    editingFrom = edge.from;
+    editingTo = edge.to;
     editValue = edge.label ?? "";
     editX = edge.labelX;
     editY = edge.labelY;
@@ -290,14 +292,21 @@
   }
 
   function commitEdit() {
-    if (editingIndex === null || !dimId) return;
+    if (!editingFrom || !editingTo || !dimId) return;
     const trimmed = editValue.trim();
-    project.updateConnectionLabel(dimId, editingIndex, trimmed || null);
-    editingIndex = null;
+    project.updateConnectionLabel(
+      dimId,
+      editingFrom,
+      editingTo,
+      trimmed || null,
+    );
+    editingFrom = null;
+    editingTo = null;
   }
 
   function cancelEdit() {
-    editingIndex = null;
+    editingFrom = null;
+    editingTo = null;
   }
 
   function onEditKeydown(e: KeyboardEvent) {
@@ -325,7 +334,7 @@
     if (!dimId) return;
 
     if (ui.isPendingDelete(dimId, edge.index)) {
-      project.removeConnection(dimId, edge.index);
+      project.removeConnection(dimId, edge.from, edge.to);
       ui.clearPendingDelete();
       return;
     }
@@ -469,7 +478,7 @@
         class:edge-line-delete={pendingDel}
         marker-end={pendingDel ? "url(#conn-arrow-delete)" : "url(#conn-arrow)"}
       />
-      {#if edge.label && editingIndex !== edge.index}
+      {#if edge.label && (editingFrom !== edge.from || editingTo !== edge.to)}
         <g
           class="edge-label-group"
           ondblclick={(e) => {
@@ -511,7 +520,7 @@
   {/if}
 </svg>
 
-{#if editingIndex !== null}
+{#if editingFrom !== null && editingTo !== null}
   <div class="label-edit-overlay" style:left="{editX}px" style:top="{editY}px">
     <input
       bind:this={editInputEl}

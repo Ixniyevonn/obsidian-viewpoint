@@ -1,5 +1,20 @@
 import type { Connection, ProjectData, Spectrum } from "../types";
 
+function getConnectionsForDimension(
+    project: ProjectData,
+    dimId: string,
+): Connection[] {
+    if (!dimId) return [];
+    const result: Connection[] = [];
+    for (const [fromId, note] of Object.entries(project.notes)) {
+        const outgoing = note.connections?.[dimId] ?? [];
+        for (const c of outgoing) {
+            result.push({ from: fromId, to: c.to, label: c.label });
+        }
+    }
+    return result;
+}
+
 export interface NodeLayout {
     x: number;
     y: number;
@@ -55,7 +70,7 @@ const CHAR_W_TITLE = 10;   // ~h1 at default Obsidian theme ≈ 1.5em
 const CHAR_W_BODY = 7.2;   // ~14px body text
 
 const TITLE_LINE_H = 32;   // line-height for title
-const BODY_LINE_H = 16;    // line-height for body text
+const BODY_LINE_H = 24;    // line-height for body text
 
 const NODE_PAD_TOP = 12;   // padding above title
 const NODE_PAD_MID = 8;    // gap between title and body
@@ -404,7 +419,7 @@ export function layoutEngine(
     const allGroupIds = dim.groups.map((g) => g.id);
     if (ungrouped.length) allGroupIds.push("__ungrouped");
 
-    const connections = project.connections[activeDimensionId] || [];
+    const connections = getConnectionsForDimension(project, activeDimensionId);
     const adj = buildGroupAdjacency(
         connections, project.notes, activeDimensionId, new Set(allGroupIds),
     );
