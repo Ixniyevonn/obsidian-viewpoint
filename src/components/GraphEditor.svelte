@@ -7,6 +7,8 @@
   import type { Dimension, Spectrum } from "../types";
   import { generateId } from "../utils/helpers";
   import { layoutEngine } from "../utils/layout";
+  import type { FontConfig } from "../utils/textMeasure";
+  import { DEFAULT_FONTS, detectFonts } from "../utils/textMeasure";
   import AxisSwitcher from "./AxisSwitcher.svelte";
   import Canvas from "./Canvas.svelte";
   import DimensionDialog from "./DimensionDialog.svelte";
@@ -25,7 +27,8 @@
   const { app, plugin, project, parentComponent }: Props = $props();
 
   const ui = createUiStore();
-
+  let fonts: FontConfig = $state(DEFAULT_FONTS);
+  let canvasAreaEl: HTMLDivElement | undefined = $state();
   let canvasRef: Canvas | undefined = $state();
 
   // --- Dimension dialog state ---
@@ -35,7 +38,9 @@
     ui.reconcile(Object.keys(project.project.dimensions));
   });
 
-  const layout = $derived(layoutEngine(project.project, ui.activeDimensionId));
+  const layout = $derived(
+    layoutEngine(project.project, ui.activeDimensionId, { fonts }),
+  );
 
   const activeDim = $derived(
     ui.activeDimensionId
@@ -423,6 +428,9 @@
 
   onMount(() => {
     window.addEventListener("wheel", onWheel, { passive: false });
+    if (canvasAreaEl) {
+      fonts = detectFonts(canvasAreaEl);
+    }
     return () => window.removeEventListener("wheel", onWheel);
   });
 
@@ -501,7 +509,7 @@
   onpointermove={handlePointerMove}
   onpointerup={handlePointerUp}
 >
-  <div class="canvas-area">
+  <div class="canvas-area" bind:this={canvasAreaEl}>
     <AxisSwitcher {project} {ui} onOpenDialog={handleOpenDialog} />
 
     {#if ui.connectingFromId}

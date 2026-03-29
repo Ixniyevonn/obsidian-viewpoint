@@ -26,6 +26,7 @@
         "vite": "^8.0.1"
     },
     "dependencies": {
+        "@chenglou/pretext": "^0.0.3",
         "@types/js-yaml": "^4.0.9",
         "js-yaml": "^4.1.1",
         "svelte-pan-zoom": "^0.0.13"

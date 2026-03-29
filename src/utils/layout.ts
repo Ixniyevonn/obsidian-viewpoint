@@ -1,11 +1,12 @@
-import type { Connection, ProjectData, Spectrum } from "../types";
+import type { ProjectData, Spectrum } from "../types";
+import { DEFAULT_FONTS, measureTextHeight, type FontConfig } from "./textMeasure";
 
 function getConnectionsForDimension(
     project: ProjectData,
     dimId: string,
-): Connection[] {
+): { from: string; to: string; label: string | null }[] {
     if (!dimId) return [];
-    const result: Connection[] = [];
+    const result: { from: string; to: string; label: string | null }[] = [];
     for (const [fromId, note] of Object.entries(project.notes)) {
         const outgoing = note.connections?.[dimId] ?? [];
         for (const c of outgoing) {
@@ -50,96 +51,46 @@ export interface LayoutOptions {
     groupGap?: number;
     groupPadding?: number;
     gridColumns?: number;
+    fonts?: FontConfig;
 }
 
 // ---------------------------------------------------------------------------
-// Node height estimation
+// Node height via pretext
 // ---------------------------------------------------------------------------
-// Previous approach: naive charCount / charsPerLine. Problems:
-//   - Doesn't respect word boundaries (wrap happens at words, not chars)
-//   - Title uses a different (larger) font than body — was using same metric
-//   - Markdown syntax characters were counted as visible width
-//   - No minimum line count for short content with tall line-height
-//   - Padding constant was too small
-//
-// New approach: word-wrap simulation with separate title/body metrics,
-// conservative rounding, and explicit per-section padding.
 
-/** Approximate average character width in px for a given font-size tier. */
-const CHAR_W_TITLE = 10;   // ~h1 at default Obsidian theme ≈ 1.5em
-const CHAR_W_BODY = 7.2;   // ~14px body text
-
-const TITLE_LINE_H = 32;   // line-height for title
-const BODY_LINE_H = 24;    // line-height for body text
-
-const NODE_PAD_TOP = 12;   // padding above title
-const NODE_PAD_MID = 8;    // gap between title and body
-const NODE_PAD_BOTTOM = 16; // padding below body
-
+const NODE_PAD_TOP = 12;
+const NODE_PAD_MID = 8;
+const NODE_PAD_BOTTOM = 8;
 const NODE_MIN_H = 64;
-
-/**
- * Estimate how many visual lines a string occupies when word-wrapped
- * into `maxWidth` pixels with a given average character width.
- */
-function estimateLines(text: string, maxWidthPx: number, charW: number): number {
-    if (!text) return 0;
-
-    const charsPerLine = Math.max(1, Math.floor(maxWidthPx / charW));
-    const paragraphs = text.split(/\n/);
-    let lines = 0;
-
-    for (const para of paragraphs) {
-        if (para.trim() === "") {
-            lines += 1; // blank line
-            continue;
-        }
-        const words = para.split(/\s+/).filter(Boolean);
-        let lineLen = 0;
-        let paraLines = 1;
-
-        for (const word of words) {
-            // Strip common markdown syntax from width calc
-            const visLen = word.replace(/[*_~`#\[\]()]/g, "").length;
-            if (lineLen === 0) {
-                lineLen = visLen;
-            } else if (lineLen + 1 + visLen > charsPerLine) {
-                paraLines++;
-                lineLen = visLen;
-            } else {
-                lineLen += 1 + visLen;
-            }
-        }
-        lines += paraLines;
-    }
-
-    return Math.max(1, lines);
-}
 
 function estimateNodeHeight(
     title: string,
     short: string,
     contentWidth: number,
+    fonts: FontConfig,
 ): number {
-    const titleLines = estimateLines(title, contentWidth, CHAR_W_TITLE);
-    const titleH = titleLines * TITLE_LINE_H;
+    const titleH = measureTextHeight(
+        title, fonts.titleFont, contentWidth, fonts.titleLineHeight,
+    ).height;
 
     let bodyH = 0;
     if (short) {
-        const bodyLines = estimateLines(short, contentWidth, CHAR_W_BODY);
-        bodyH = bodyLines * BODY_LINE_H;
+        bodyH = measureTextHeight(
+            short, fonts.bodyFont, contentWidth, fonts.bodyLineHeight,
+        ).height;
     }
 
-    const total = NODE_PAD_TOP + titleH + (short ? NODE_PAD_MID + bodyH : 0) + NODE_PAD_BOTTOM;
+    const total =
+        NODE_PAD_TOP + titleH + (short ? NODE_PAD_MID + bodyH : 0) + NODE_PAD_BOTTOM;
     return Math.max(NODE_MIN_H, total);
 }
 
 // ---------------------------------------------------------------------------
-// Group adjacency / BFS (unchanged logic)
+// Group adjacency / BFS (unchanged)
 // ---------------------------------------------------------------------------
 
 function buildGroupAdjacency(
-    connections: Connection[],
+    connections: { from: string; to: string; label: string | null }[],
     notes: ProjectData["notes"],
     dimId: string,
     validGroupIds: Set<string>,
@@ -281,16 +232,11 @@ function computeGroupPlacements(
 }
 
 // ---------------------------------------------------------------------------
-// Helper: place nodes inside a group and return the group's actual height
+// Helper: place nodes inside a group
 // ---------------------------------------------------------------------------
 
 const LABEL_H = 40;
 
-/**
- * Lay out `members` vertically inside a group starting at (gx, gy).
- * Writes into `result.nodes` and returns the computed group height
- * that exactly wraps all children with proper padding.
- */
 function placeNodesInGroup(
     members: string[],
     gx: number,
@@ -319,8 +265,6 @@ function placeNodesInGroup(
         cursorY += h + nodeGap;
     }
 
-    // Group height = from group top to last node bottom + padding
-    // cursorY currently points past the last nodeGap, subtract it, add bottom padding
     const groupHeight = (cursorY - nodeGap) - gy + groupPadding;
     return groupHeight;
 }
@@ -340,6 +284,7 @@ export function layoutEngine(
         groupGap = 60,
         groupPadding = 40,
         gridColumns = 3,
+        fonts = DEFAULT_FONTS,
     } = options;
 
     const contentWidth = nodeWidth - 32;
@@ -348,7 +293,7 @@ export function layoutEngine(
 
     function heightOf(id: string): number {
         const note = project.notes[id];
-        return estimateNodeHeight(note.title, note.short, contentWidth);
+        return estimateNodeHeight(note.title, note.short, contentWidth, fonts);
     }
 
     const dim = activeDimensionId
@@ -409,7 +354,7 @@ export function layoutEngine(
             project, activeDimensionId, dim,
             buckets, ungrouped,
             xSpec ?? null, ySpec ?? null,
-            nodeWidth, nodeGap, groupGap, groupPadding, groupWidth, contentWidth,
+            nodeWidth, nodeGap, groupGap, groupPadding, groupWidth, contentWidth, fonts,
         );
     }
 
@@ -490,25 +435,21 @@ function layoutWithSpectra(
     groupPadding: number,
     groupWidth: number,
     contentWidth: number,
+    fonts: FontConfig,
 ): LayoutResult {
     const result: LayoutResult = { nodes: {}, groups: {} };
 
     function heightOf(id: string): number {
         const note = project.notes[id];
-        return estimateNodeHeight(note.title, note.short, contentWidth);
+        return estimateNodeHeight(note.title, note.short, contentWidth, fonts);
     }
 
-    /**
-     * Compute exact group content height by summing actual node heights.
-     * This must match what placeNodesInGroup will produce.
-     */
     function groupContentHeight(members: string[]): number {
         if (members.length === 0) return LABEL_H + groupPadding * 2;
-        let h = LABEL_H + groupPadding; // top: label + top padding
+        let h = LABEL_H + groupPadding;
         for (const noteId of members) {
             h += heightOf(noteId) + nodeGap;
         }
-        // Remove trailing gap, add bottom padding
         h = h - nodeGap + groupPadding;
         return h;
     }
@@ -553,7 +494,6 @@ function layoutWithSpectra(
     const placed = groups.filter((g) => g.xIdx >= 0 && g.yIdx >= 0);
     const unplaced = groups.filter((g) => g.xIdx < 0 || g.yIdx < 0);
 
-    // Build grid: cell -> stacked groups
     const grid = new Map<string, GroupInfo[]>();
     for (const g of placed) {
         const key = `${g.xIdx},${g.yIdx}`;
@@ -562,7 +502,6 @@ function layoutWithSpectra(
         grid.set(key, list);
     }
 
-    // Per-row max height: compute from actual stacked cell heights
     const rowMaxH = new Array(yStopCount).fill(LABEL_H + groupPadding * 2);
     for (let r = 0; r < yStopCount; r++) {
         for (let c = 0; c < xStopCount; c++) {
@@ -570,7 +509,7 @@ function layoutWithSpectra(
             if (!cellGroups || cellGroups.length === 0) continue;
             let totalH = 0;
             for (const cg of cellGroups) totalH += cg.contentH + groupGap;
-            totalH -= groupGap; // no trailing gap
+            totalH -= groupGap;
             rowMaxH[r] = Math.max(rowMaxH[r], totalH);
         }
     }
@@ -600,7 +539,6 @@ function layoutWithSpectra(
         colX.push(SPECTRUM_MARGIN + c * (colWidth + groupGap));
     }
 
-    // Place groups on grid
     const cellCursor = new Map<string, number>();
 
     for (const g of placed) {
@@ -623,7 +561,6 @@ function layoutWithSpectra(
         cellCursor.set(cellKey, cellY + gh + groupGap);
     }
 
-    // Place unplaced groups below the grid
     let unplacedY = yAccum + groupGap;
     let unplacedX = SPECTRUM_MARGIN;
     for (const g of unplaced) {
@@ -646,7 +583,6 @@ function layoutWithSpectra(
         }
     }
 
-    // Spectrum overlay info
     if (xSpec) {
         result.xSpectrum = {
             name: xSpec.name,
