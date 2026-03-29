@@ -1,6 +1,10 @@
 import type { ProjectData, Spectrum } from "../types";
 import { createUndoManager } from "./undo";
 
+export const DEFAULT_NODE_WIDTH = 200;
+export const MIN_NODE_WIDTH = 120;
+export const MAX_NODE_WIDTH = 600;
+
 export function emptyProject(): ProjectData {
     return {
         meta: {
@@ -15,7 +19,6 @@ export function emptyProject(): ProjectData {
             },
         },
         notes: {},
-
         node_order: {},
     };
 }
@@ -107,7 +110,6 @@ export function createProjectStore() {
         removeNote(id: string) {
             snap();
             delete project.notes[id];
-            // Clean up any incoming references (optional but clean)
             for (const note of Object.values(project.notes)) {
                 for (const dimId of Object.keys(note.connections)) {
                     note.connections[dimId] = note.connections[dimId].filter(c => c.to !== id);
@@ -133,6 +135,16 @@ export function createProjectStore() {
         updateNoteLong(id: string, long: string) {
             merge();
             if (project.notes[id]) project.notes[id].long = long;
+            touch(); notify();
+            return project;
+        },
+
+        updateNoteWidth(id: string, width: number) {
+            merge();
+            const clamped = Math.round(Math.max(MIN_NODE_WIDTH, Math.min(MAX_NODE_WIDTH, width)));
+            if (project.notes[id]) {
+                project.notes[id].width = clamped === DEFAULT_NODE_WIDTH ? undefined : clamped;
+            }
             touch(); notify();
             return project;
         },
@@ -178,12 +190,10 @@ export function createProjectStore() {
 
             dim.name = name;
 
-            // Update spectra
             if (xSpectrum) {
                 dim["x-spectrum"] = xSpectrum;
             } else {
                 delete dim["x-spectrum"];
-                // Clear x-stop assignments from groups
                 for (const g of dim.groups) g.x = null;
             }
 
@@ -194,7 +204,6 @@ export function createProjectStore() {
                 for (const g of dim.groups) g.y = null;
             }
 
-            // Validate existing group stop assignments against new stops
             if (xSpectrum) {
                 const validStops = new Set(xSpectrum.stops);
                 for (const g of dim.groups) {
@@ -252,7 +261,6 @@ export function createProjectStore() {
             return project;
         },
 
-        /** Set a group's position on a spectrum axis */
         setGroupStop(dimensionId: string, groupId: string, axis: "x" | "y", stopName: string | null) {
             snap();
             const dim = project.dimensions[dimensionId];
@@ -275,7 +283,6 @@ export function createProjectStore() {
             touch(); notify();
         },
 
-        /** Remove a specific connection by from→to (more robust than index) */
         removeConnection(dimensionId: string, from: string, to: string) {
             snap();
             const note = project.notes[from];
@@ -305,4 +312,3 @@ export function createProjectStore() {
 }
 
 export type ProjectStore = ReturnType<typeof createProjectStore>;
-

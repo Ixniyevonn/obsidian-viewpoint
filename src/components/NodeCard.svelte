@@ -1,6 +1,10 @@
 <script lang="ts">
   import type { App, Component } from "obsidian";
-  import type { ProjectStore } from "../stores/project.svelte";
+  import {
+    MAX_NODE_WIDTH,
+    MIN_NODE_WIDTH,
+    type ProjectStore,
+  } from "../stores/project.svelte";
   import type { UiStore } from "../stores/ui.svelte";
   import MarkdownContent from "./MarkdownContent.svelte";
   import Node from "./Node.svelte";
@@ -61,6 +65,11 @@
   let dragStartClientY = 0;
   const DRAG_THRESHOLD = 5;
 
+  // --- Resize state ---
+  let isResizing = $state(false);
+  let resizeStartX = 0;
+  let resizeStartWidth = 0;
+
   $effect(() => {
     if (isEditingShort && shortInputEl) {
       editValue = short;
@@ -75,8 +84,6 @@
   $effect(() => {
     if (isEditingTitle && titleInputEl && titleWrapperEl) {
       titleEditValue = title;
-      // Copy computed style from the h1 that was just removed.
-      // The wrapper preserves the h1 reference dimensions via CSS vars set below.
       requestAnimationFrame(() => {
         titleInputEl?.focus();
         titleInputEl?.select();
@@ -84,7 +91,6 @@
     }
   });
 
-  /** Snapshot h1 computed style onto the wrapper as CSS vars, so the input can match. */
   function captureH1Style() {
     if (!titleWrapperEl) return;
     const h1 = titleWrapperEl.querySelector("h1");
@@ -112,11 +118,10 @@
       const rDimId = ui.retargetDimId;
       const rEnd = ui.retargetEnd;
       const rAnchor = ui.retargetAnchorId;
-      const rOriginalId = ui.retargetOriginalId; // ← was missing
+      const rOriginalId = ui.retargetOriginalId;
       const rLabel = ui.retargetLabel;
 
       if (rDimId && rEnd && rAnchor && rOriginalId !== null) {
-        // Remove old connection (new from/to signature)
         if (rEnd === "target") {
           project.removeConnection(rDimId, rAnchor, rOriginalId);
           project.addConnection(rDimId, rAnchor, noteId, rLabel);
@@ -236,7 +241,8 @@
       !isConnectingMode &&
       !isRetargeting &&
       !isEditingShort &&
-      !isEditingTitle
+      !isEditingTitle &&
+      !isResizing
     ) {
       dragTracking = true;
       dragStartClientX = e.clientX;
@@ -288,6 +294,40 @@
 
   function handleShortBlur() {
     commitShortEdit();
+  }
+
+  // --- Resize handle ---
+
+  function handleResizePointerDown(e: PointerEvent) {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    isResizing = true;
+    resizeStartX = e.clientX;
+    resizeStartWidth = width;
+    window.addEventListener("pointermove", onResizeMove);
+    window.addEventListener("pointerup", onResizeUp);
+  }
+
+  function onResizeMove(e: PointerEvent) {
+    if (!isResizing) return;
+    // Account for canvas zoom: 1 CSS pixel of mouse movement = 1/zoom world pixels
+    const vp = document.querySelector(".canvas-viewport") as HTMLElement;
+    const zoom = vp
+      ? parseFloat(vp.style.getPropertyValue("--zoom") || "1")
+      : 1;
+    const dx = (e.clientX - resizeStartX) / zoom;
+    const newWidth = Math.max(
+      MIN_NODE_WIDTH,
+      Math.min(MAX_NODE_WIDTH, resizeStartWidth + dx),
+    );
+    project.updateNoteWidth(noteId, newWidth);
+  }
+
+  function onResizeUp(_e: PointerEvent) {
+    isResizing = false;
+    window.removeEventListener("pointermove", onResizeMove);
+    window.removeEventListener("pointerup", onResizeUp);
   }
 </script>
 
@@ -357,6 +397,10 @@
       </div>
     {/if}
   </div>
+
+  <!-- Resize handle -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="resize-handle" onpointerdown={handleResizePointerDown}></div>
 </Node>
 
 <style>
@@ -368,6 +412,7 @@
     box-shadow: var(--shadow-stationary);
     cursor: default;
     user-select: none;
+    position: relative;
     transition:
       border-color 120ms ease,
       box-shadow 120ms ease;
@@ -429,11 +474,6 @@
     padding: 0;
   }
 
-  /*
-   * The input reads CSS vars that were captured from the live h1's
-   * getComputedStyle right before switching to edit mode.
-   * This guarantees pixel-identical size regardless of Obsidian theme.
-   */
   .title-edit {
     display: block;
     width: 100%;
@@ -482,5 +522,22 @@
     outline: none;
     overflow: hidden;
     box-sizing: border-box;
+  }
+
+  .resize-handle {
+    position: absolute;
+    top: 0;
+    right: -4px;
+    width: 8px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 10;
+  }
+
+  .resize-handle:hover,
+  .resize-handle:active {
+    background: var(--interactive-accent);
+    opacity: 0.3;
+    border-radius: 0 var(--radius-m) var(--radius-m) 0;
   }
 </style>

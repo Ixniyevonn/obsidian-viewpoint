@@ -1,6 +1,12 @@
 import type { ProjectData, Spectrum } from "../types";
 import { DEFAULT_FONTS, measureTextHeight, type FontConfig } from "./textMeasure";
 
+const DEFAULT_NODE_WIDTH = 200;
+
+function noteWidth(project: ProjectData, noteId: string): number {
+    return project.notes[noteId]?.width ?? DEFAULT_NODE_WIDTH;
+}
+
 function getConnectionsForDimension(
     project: ProjectData,
     dimId: string,
@@ -46,7 +52,6 @@ export interface SpectrumLayout {
 }
 
 export interface LayoutOptions {
-    nodeWidth?: number;
     nodeGap?: number;
     groupGap?: number;
     groupPadding?: number;
@@ -66,9 +71,10 @@ const NODE_MIN_H = 64;
 function estimateNodeHeight(
     title: string,
     short: string,
-    contentWidth: number,
+    nw: number,
     fonts: FontConfig,
 ): number {
+    const contentWidth = nw - 32;
     const titleH = measureTextHeight(
         title, fonts.titleFont, contentWidth, fonts.titleLineHeight,
     ).height;
@@ -232,6 +238,22 @@ function computeGroupPlacements(
 }
 
 // ---------------------------------------------------------------------------
+// Helper: compute group width from its members
+// ---------------------------------------------------------------------------
+
+function groupWidthForMembers(
+    members: string[],
+    project: ProjectData,
+    groupPadding: number,
+): number {
+    let maxNw = DEFAULT_NODE_WIDTH;
+    for (const id of members) {
+        maxNw = Math.max(maxNw, noteWidth(project, id));
+    }
+    return maxNw + groupPadding * 2;
+}
+
+// ---------------------------------------------------------------------------
 // Helper: place nodes inside a group
 // ---------------------------------------------------------------------------
 
@@ -239,12 +261,13 @@ const LABEL_H = 40;
 
 function placeNodesInGroup(
     members: string[],
+    project: ProjectData,
     gx: number,
     gy: number,
-    nodeWidth: number,
     nodeGap: number,
     groupPadding: number,
-    heightOf: (id: string) => number,
+    groupWidth: number,
+    fonts: FontConfig,
     result: LayoutResult,
 ): number {
     if (members.length === 0) {
@@ -255,11 +278,17 @@ function placeNodesInGroup(
     let cursorY = startY;
 
     for (const noteId of members) {
-        const h = heightOf(noteId);
+        const nw = noteWidth(project, noteId);
+        const h = estimateNodeHeight(
+            project.notes[noteId].title,
+            project.notes[noteId].short,
+            nw,
+            fonts,
+        );
         result.nodes[noteId] = {
             x: gx + groupPadding,
             y: cursorY,
-            width: nodeWidth,
+            width: nw,
             height: h,
         };
         cursorY += h + nodeGap;
@@ -279,7 +308,6 @@ export function layoutEngine(
     options: LayoutOptions = {},
 ): LayoutResult {
     const {
-        nodeWidth = 200,
         nodeGap = 24,
         groupGap = 60,
         groupPadding = 40,
@@ -287,14 +315,8 @@ export function layoutEngine(
         fonts = DEFAULT_FONTS,
     } = options;
 
-    const contentWidth = nodeWidth - 32;
     const result: LayoutResult = { nodes: {}, groups: {} };
     const noteIds = Object.keys(project.notes);
-
-    function heightOf(id: string): number {
-        const note = project.notes[id];
-        return estimateNodeHeight(note.title, note.short, contentWidth, fonts);
-    }
 
     const dim = activeDimensionId
         ? project.dimensions[activeDimensionId]
@@ -308,11 +330,17 @@ export function layoutEngine(
             for (let c = 1; c < gridColumns; c++) {
                 if (colHeights[c] < colHeights[col]) col = c;
             }
-            const h = heightOf(noteIds[i]);
+            const nw = noteWidth(project, noteIds[i]);
+            const h = estimateNodeHeight(
+                project.notes[noteIds[i]].title,
+                project.notes[noteIds[i]].short,
+                nw,
+                fonts,
+            );
             result.nodes[noteIds[i]] = {
-                x: col * (nodeWidth + nodeGap),
+                x: col * (DEFAULT_NODE_WIDTH + nodeGap),
                 y: colHeights[col],
-                width: nodeWidth,
+                width: nw,
                 height: h,
             };
             colHeights[col] += h + nodeGap;
@@ -343,8 +371,6 @@ export function layoutEngine(
         }
     }
 
-    const groupWidth = nodeWidth + groupPadding * 2;
-
     const xSpec = dim["x-spectrum"] as Spectrum | undefined;
     const ySpec = dim["y-spectrum"] as Spectrum | undefined;
     const hasSpectra = !!xSpec || !!ySpec;
@@ -354,7 +380,7 @@ export function layoutEngine(
             project, activeDimensionId, dim,
             buckets, ungrouped,
             xSpec ?? null, ySpec ?? null,
-            nodeWidth, nodeGap, groupGap, groupPadding, groupWidth, contentWidth, fonts,
+            nodeGap, groupGap, groupPadding, fonts,
         );
     }
 
@@ -364,6 +390,7 @@ export function layoutEngine(
     const allGroupIds = dim.groups.map((g) => g.id);
     if (ungrouped.length) allGroupIds.push("__ungrouped");
 
+    // Compute per-column max group width
     const connections = getConnectionsForDimension(project, activeDimensionId);
     const adj = buildGroupAdjacency(
         connections, project.notes, activeDimensionId, new Set(allGroupIds),
@@ -383,11 +410,31 @@ export function layoutEngine(
         ids.sort((a, b) => placements.get(a)!.row - placements.get(b)!.row);
     }
 
+    // Find widest group in each column
+    const colMaxWidth = new Map<number, number>();
+    for (const [col, groupIds] of columns) {
+        let maxW = DEFAULT_NODE_WIDTH + groupPadding * 2;
+        for (const gid of groupIds) {
+            const members = gid === "__ungrouped" ? ungrouped : buckets[gid] || [];
+            maxW = Math.max(maxW, groupWidthForMembers(members, project, groupPadding));
+        }
+        colMaxWidth.set(col, maxW);
+    }
+
     const sortedCols = [...columns.keys()].sort((a, b) => a - b);
+
+    // Compute column X offsets
+    const colXOffset = new Map<number, number>();
+    let xAccum = 0;
+    for (const col of sortedCols) {
+        colXOffset.set(col, xAccum);
+        xAccum += colMaxWidth.get(col)! + groupGap;
+    }
 
     for (const col of sortedCols) {
         const groupIds = columns.get(col)!;
-        const x = col * (groupWidth + groupGap);
+        const x = colXOffset.get(col)!;
+        const gw = colMaxWidth.get(col)!;
         let cursorY = 0;
 
         for (const groupId of groupIds) {
@@ -399,14 +446,14 @@ export function layoutEngine(
                     : (dim.groups.find((g) => g.id === groupId)?.name ?? "");
 
             const gh = placeNodesInGroup(
-                members, x, cursorY,
-                nodeWidth, nodeGap, groupPadding,
-                heightOf, result,
+                members, project, x, cursorY,
+                nodeGap, groupPadding, gw,
+                fonts, result,
             );
 
             result.groups[groupId] = {
                 x, y: cursorY,
-                width: groupWidth, height: gh,
+                width: gw, height: gh,
                 name: groupName,
             };
 
@@ -429,26 +476,19 @@ function layoutWithSpectra(
     ungrouped: string[],
     xSpec: Spectrum | null,
     ySpec: Spectrum | null,
-    nodeWidth: number,
     nodeGap: number,
     groupGap: number,
     groupPadding: number,
-    groupWidth: number,
-    contentWidth: number,
     fonts: FontConfig,
 ): LayoutResult {
     const result: LayoutResult = { nodes: {}, groups: {} };
-
-    function heightOf(id: string): number {
-        const note = project.notes[id];
-        return estimateNodeHeight(note.title, note.short, contentWidth, fonts);
-    }
 
     function groupContentHeight(members: string[]): number {
         if (members.length === 0) return LABEL_H + groupPadding * 2;
         let h = LABEL_H + groupPadding;
         for (const noteId of members) {
-            h += heightOf(noteId) + nodeGap;
+            const nw = noteWidth(project, noteId);
+            h += estimateNodeHeight(project.notes[noteId].title, project.notes[noteId].short, nw, fonts) + nodeGap;
         }
         h = h - nodeGap + groupPadding;
         return h;
@@ -469,6 +509,7 @@ function layoutWithSpectra(
         xIdx: number;
         yIdx: number;
         contentH: number;
+        gw: number;
     }
 
     const groups: GroupInfo[] = [];
@@ -480,6 +521,7 @@ function layoutWithSpectra(
             id: g.id, name: g.name, members,
             xIdx, yIdx,
             contentH: groupContentHeight(members),
+            gw: groupWidthForMembers(members, project, groupPadding),
         });
     }
 
@@ -488,11 +530,18 @@ function layoutWithSpectra(
             id: "__ungrouped", name: "Ungrouped", members: ungrouped,
             xIdx: -1, yIdx: -1,
             contentH: groupContentHeight(ungrouped),
+            gw: groupWidthForMembers(ungrouped, project, groupPadding),
         });
     }
 
     const placed = groups.filter((g) => g.xIdx >= 0 && g.yIdx >= 0);
     const unplaced = groups.filter((g) => g.xIdx < 0 || g.yIdx < 0);
+
+    // Compute per-column max width
+    const colMaxW = new Array(xStopCount).fill(DEFAULT_NODE_WIDTH + groupPadding * 2);
+    for (const g of placed) {
+        colMaxW[g.xIdx] = Math.max(colMaxW[g.xIdx], g.gw);
+    }
 
     const grid = new Map<string, GroupInfo[]>();
     for (const g of placed) {
@@ -515,12 +564,15 @@ function layoutWithSpectra(
     }
 
     const SPECTRUM_MARGIN = 80;
-    const colWidth = groupWidth;
 
-    const xExtent = Math.max(
-        xStopCount * (colWidth + groupGap) - groupGap + SPECTRUM_MARGIN * 2,
-        colWidth + SPECTRUM_MARGIN * 2,
-    );
+    const colX: number[] = [];
+    let cx = SPECTRUM_MARGIN;
+    for (let c = 0; c < xStopCount; c++) {
+        colX.push(cx);
+        cx += colMaxW[c] + groupGap;
+    }
+
+    const xExtent = cx - groupGap + SPECTRUM_MARGIN;
     const totalRowH = rowMaxH.reduce((a, b) => a + b, 0) + (yStopCount - 1) * groupGap;
     const yExtent = Math.max(
         totalRowH + SPECTRUM_MARGIN * 2,
@@ -534,27 +586,23 @@ function layoutWithSpectra(
         yAccum += rowMaxH[r] + groupGap;
     }
 
-    const colX: number[] = [];
-    for (let c = 0; c < xStopCount; c++) {
-        colX.push(SPECTRUM_MARGIN + c * (colWidth + groupGap));
-    }
-
     const cellCursor = new Map<string, number>();
 
     for (const g of placed) {
         const cellKey = `${g.xIdx},${g.yIdx}`;
         const cellY = cellCursor.get(cellKey) ?? rowY[g.yIdx];
         const gx = colX[g.xIdx];
+        const gw = colMaxW[g.xIdx];
 
         const gh = placeNodesInGroup(
-            g.members, gx, cellY,
-            nodeWidth, nodeGap, groupPadding,
-            heightOf, result,
+            g.members, project, gx, cellY,
+            nodeGap, groupPadding, gw,
+            fonts, result,
         );
 
         result.groups[g.id] = {
             x: gx, y: cellY,
-            width: colWidth, height: gh,
+            width: gw, height: gh,
             name: g.name,
         };
 
@@ -564,20 +612,21 @@ function layoutWithSpectra(
     let unplacedY = yAccum + groupGap;
     let unplacedX = SPECTRUM_MARGIN;
     for (const g of unplaced) {
+        const gw = g.gw;
         const gh = placeNodesInGroup(
-            g.members, unplacedX, unplacedY,
-            nodeWidth, nodeGap, groupPadding,
-            heightOf, result,
+            g.members, project, unplacedX, unplacedY,
+            nodeGap, groupPadding, gw,
+            fonts, result,
         );
 
         result.groups[g.id] = {
             x: unplacedX, y: unplacedY,
-            width: colWidth, height: gh,
+            width: gw, height: gh,
             name: g.name,
         };
 
-        unplacedX += colWidth + groupGap;
-        if (unplacedX > xExtent - colWidth) {
+        unplacedX += gw + groupGap;
+        if (unplacedX > xExtent - gw) {
             unplacedX = SPECTRUM_MARGIN;
             unplacedY += gh + groupGap;
         }
@@ -589,7 +638,7 @@ function layoutWithSpectra(
             poles: xSpec.poles,
             stops: xSpec.stops.map((name, i) => ({
                 name,
-                position: colX[i] + colWidth / 2,
+                position: colX[i] + colMaxW[i] / 2,
             })),
             extent: xExtent,
         };

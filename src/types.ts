@@ -27,6 +27,7 @@ export interface Note {
     title: string;
     short: string;
     long: string;
+    width?: number;
     membership: Record<string, string | null>;
     connections: Record<string, { to: string; label: string | null }[]>;
 }
@@ -52,8 +53,8 @@ export interface ProjectData {
 
 // Runtime UI state (not serialized)
 export interface FocusState {
-    primary: string | null; // noteId or groupId
-    secondary: string | null; // for dual focus
+    primary: string | null;
+    secondary: string | null;
     type: "single" | "dual";
 }
 
@@ -65,6 +66,6 @@ export interface ViewportState {
 
 export interface SelectionState {
     nodes: Set<string>;
-    connections: Set<number>; // index into current dimension's connection list
+    connections: Set<number>;
     group: string | null;
 }
