@@ -406,7 +406,7 @@
           ondblclick={(e) => e.stopPropagation()}
         >
           {#if short}
-            <MarkdownContent {app} markdown={short} {parentComponent} />
+            <MarkdownContent {app} markdown={short} sourcePath={project.sourcePath} {parentComponent} />
           {:else}
             <span class="short-placeholder">Click to add description…</span>
           {/if}

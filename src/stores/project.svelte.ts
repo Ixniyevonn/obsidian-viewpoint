@@ -24,6 +24,7 @@ export function emptyProject(): ProjectData {
 
 export function createProjectStore() {
     let project = $state(emptyProject());
+    let sourcePath = $state("");
     let listeners: Array<() => void> = [];
     const undo = createUndoManager();
 
@@ -51,6 +52,8 @@ export function createProjectStore() {
 
     return {
         get project() { return project; },
+        get sourcePath() { return sourcePath; },
+        set sourcePath(path: string) { sourcePath = path; },
         get undo() { return undo; },
 
         getConnections,

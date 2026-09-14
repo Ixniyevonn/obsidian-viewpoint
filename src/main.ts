@@ -36,6 +36,7 @@ export default class DimGraphPlugin extends Plugin {
         this.registerView(VIEW_TYPE_GRAPH, (leaf) => new GraphView(leaf, this));
 
         this.registerExtensions(["viewpoint"], VIEW_TYPE_GRAPH);
+        this.registerHoverLinkSource(VIEW_TYPE_GRAPH, { display: "Viewpoint", defaultMod: true });
 
         this.addRibbonIcon("network", "Viewpoint", () => {
             this.activateView();

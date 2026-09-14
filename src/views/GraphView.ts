@@ -49,6 +49,7 @@ export class GraphView extends TextFileView {
      * @param clear - true when switching to a different file (not just reloading)
      */
     setViewData(data: string, clear: boolean): void {
+        this.project.sourcePath = this.file?.path ?? "";
         if (clear) {
             this.project.reset();
         }
@@ -69,6 +70,9 @@ export class GraphView extends TextFileView {
     }
 
     async onOpen() {
+        this.registerEvent(this.app.vault.on("rename", (file) => {
+            if (file === this.file) this.project.sourcePath = file.path;
+        }));
         this.contentEl.empty();
         this.contentEl.addClass("dim-graph-container");
 

@@ -90,8 +90,9 @@ dimensions:
         "y": null
 notes:
   kira:
+    width: 260
     title: Kira Thornwood
-    short: Reluctant hero with innate fire magic, former blacksmith's apprentice caught between rebels and crown.
+    short: Reluctant hero with innate fire magic, former blacksmith's apprentice caught between rebels and crown. See [[Demo Notes#Fire magic|her training]].
     long: |
       # Kira Thornwood
 
@@ -111,7 +112,7 @@ notes:
       magic: innate-users
   valdric:
     title: Lord Valdric
-    short: Grand Inquisitor who seeks to control or eliminate all magic users.
+    short: Grand Inquisitor hunting magic users. See [[Demo Notes]].
     long: |
       # Lord Valdric Ashmore
 
@@ -126,7 +127,7 @@ notes:
       magic: null
   elena:
     title: Elena Brightwater
-    short: Court mage secretly aiding the rebellion; Kira's magic mentor.
+    short: Court mage secretly aiding the rebellion and mentoring Kira. Her lessons focus on restraint, trust, and [[Demo Notes#Fire magic|controlling fire magic]] before either side can turn Kira into a weapon.
     long: |
       # Elena Brightwater
 
@@ -138,7 +139,7 @@ notes:
       magic: scholars
   marcus:
     title: Marcus the Red
-    short: Pragmatic rebel commander who views Kira's power as the key to winning.
+    short: A pragmatic rebel commander who sees Kira's power as the key to victory. He must balance the urgency of the uprising against the safety of villages caught between both armies. His plans put increasing pressure on Elena's secret work at court, while Kira questions whether winning at any cost will leave a kingdom worth saving. Read [the rebellion](Demo%20Notes.md#The%20rebellion) for background.
     long: |
       # Marcus the Red
 

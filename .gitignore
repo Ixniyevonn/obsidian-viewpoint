@@ -30,3 +30,4 @@ test-vault/.obsidian/plugins/obsidian-viewpoint-plugin/*.json
 *.sw?
 *.viewpoint
 !/example.viewpoint
+!/test-vault/Feature demo.viewpoint

@@ -25,6 +25,10 @@ A dimension can define an X-spectrum, a Y-spectrum, or the two spectra together.
 
 The canvas combines HTML cards with SVG connections. Short descriptions support Markdown through the Obsidian renderer. Nodes automatically use 200, 320, or 440 pixels for up to 120, up to 300, or more visible title/description characters. Drag the right edge for a persistent manual width (120-600 pixels); nearby widths of notes in the same column snap within 8 screen pixels. Double-click the edge to restore automatic sizing.
 
+## Obsidian links
+
+Internal links such as `[[Demo Notes]]`, `[[Demo Notes#Fire magic|training]]`, and `[training](Demo%20Notes.md#Fire%20magic)` open through Obsidian using the viewpoint file as their source. Ctrl/Cmd-click or middle-click opens a new tab; hover previews follow the core Page preview settings for Viewpoint. Click description text outside a link to edit it.
+
 ## Start a project
 
 1. Enable the plugin in Obsidian.
@@ -36,7 +40,7 @@ The canvas combines HTML cards with SVG connections. Short descriptions support 
 
 The folder context menu also contains **New viewpoint**. The **Viewpoint** ribbon button opens the graph view.
 
-To try a populated project, copy [example.viewpoint](example.viewpoint) into your vault. Then open the file in Obsidian.
+To try a populated project, copy [example.viewpoint](example.viewpoint) and [Demo Notes.md](Demo%20Notes.md) into the same folder in your vault. Then open the file in Obsidian.
 
 ## Controls
 
@@ -92,7 +96,7 @@ These limits describe the current implementation:
 
 Use [SKILL.md](SKILL.md) to create or edit `.viewpoint` files. It defines the fields, reference rules, and checks for generated files.
 
-The [example file](example.viewpoint) contains six notes across three dimensions. It includes spectra, ungrouped notes, labeled connections, Markdown, and a custom node width.
+The [example file](example.viewpoint) contains six notes across three dimensions. It includes spectra, ungrouped notes, labeled connections, all three automatic widths, and a custom width. Keep [Demo Notes.md](Demo%20Notes.md) beside it to try document links, heading links, aliases, and Markdown links. A ready-to-open copy is in `test-vault/Feature demo.viewpoint`.
 
 Node positions, viewport settings, selections, and undo history are not part of the file format.
 
