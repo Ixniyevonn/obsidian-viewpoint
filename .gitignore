@@ -29,3 +29,6 @@ test-vault/.obsidian/
 *.viewpoint
 !/example.viewpoint
 !/test-vault/Feature demo.viewpoint
+
+# Disposable agent work files
+artifacts/temp/
