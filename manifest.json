@@ -4,7 +4,7 @@
 	"description": "Explore connected notes through dimensions, groups, and spectra in Obsidian.",
 	"author": "Ixniyevonn",
 	"authorUrl": "https://github.com/Ixniyevonn",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"minAppVersion": "1.7.2",
 	"isDesktopOnly": false
 }
