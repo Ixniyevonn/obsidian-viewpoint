@@ -66,7 +66,7 @@ export function detectFonts(container: HTMLElement): FontConfig {
     // Apply the same classes the node cards live in
     probe.className = "markdown-rendered";
 
-    const h1 = document.createElement("h1");
+    const h1 = document.createElement("h2");
     h1.textContent = "Xg";
     probe.appendChild(h1);
 

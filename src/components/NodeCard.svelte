@@ -74,19 +74,13 @@
 
   /** After every render that could change content height, report actual DOM height */
   $effect(() => {
-    // Track reactive dependencies that affect height
-    void title;
-    void short;
-    void width;
-    void isEditingShort;
-    void isEditingTitle;
     if (!cardEl || !onMeasured) return;
-    // Use rAF to read after paint
-    requestAnimationFrame(() => {
-      if (cardEl) {
-        onMeasured(noteId, cardEl.offsetHeight);
-      }
-    });
+    const element = cardEl;
+    const report = () => onMeasured(noteId, element.offsetHeight + 4);
+    const observer = new ResizeObserver(report);
+    observer.observe(element);
+    report();
+    return () => observer.disconnect();
   });
 
   $effect(() => {
@@ -438,6 +432,10 @@
 
   .node-card-inner {
     padding: 8px 16px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-wrap: anywhere;
   }
 
   :global(.node-card:hover) {
@@ -523,6 +521,16 @@
   .short-text {
     cursor: text;
     min-height: 1.2em;
+  }
+
+  .short-text :global(.markdown-rendered > :first-child),
+  .short-text :global(.markdown-rendered > div > :first-child) {
+    margin-top: 0;
+  }
+
+  .short-text :global(.markdown-rendered > :last-child),
+  .short-text :global(.markdown-rendered > div > :last-child) {
+    margin-bottom: 0;
   }
 
   .short-placeholder {

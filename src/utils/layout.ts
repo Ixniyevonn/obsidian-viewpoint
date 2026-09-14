@@ -65,9 +65,9 @@ export interface LayoutOptions {
 // Node height estimation
 // ---------------------------------------------------------------------------
 
-const NODE_PAD_TOP = 12;
+const NODE_PAD_TOP = 8;
 const NODE_PAD_MID = 8;
-const NODE_PAD_BOTTOM = 8;
+const NODE_PAD_BOTTOM = 16;
 const NODE_MIN_H = 64;
 
 function estimateNodeHeight(
