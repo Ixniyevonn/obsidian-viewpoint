@@ -13,10 +13,8 @@ dist-ssr
 *.local
 build
 
-test-vault/.obsidian/workspace.json
-test-vault/.obsidian/plugins/obsidian-viewpoint-plugin/*.css
-test-vault/.obsidian/plugins/obsidian-viewpoint-plugin/*.js
-test-vault/.obsidian/plugins/obsidian-viewpoint-plugin/*.json
+# Vault settings and installed plugins are local runtime state.
+test-vault/.obsidian/
 
 # Editor directories and files
 .vscode/*
