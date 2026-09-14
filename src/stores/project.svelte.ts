@@ -1,9 +1,8 @@
 import type { ProjectData, Spectrum } from "../types";
 import { createUndoManager } from "./undo";
 
-export const DEFAULT_NODE_WIDTH = 200;
-export const MIN_NODE_WIDTH = 120;
-export const MAX_NODE_WIDTH = 600;
+import { MIN_NODE_WIDTH, MAX_NODE_WIDTH } from "../utils/nodeWidth";
+export { DEFAULT_NODE_WIDTH, MIN_NODE_WIDTH, MAX_NODE_WIDTH } from "../utils/nodeWidth";
 
 export function emptyProject(): ProjectData {
     return {
@@ -139,11 +138,11 @@ export function createProjectStore() {
             return project;
         },
 
-        updateNoteWidth(id: string, width: number) {
+        updateNoteWidth(id: string, width: number | undefined) {
             merge();
-            const clamped = Math.round(Math.max(MIN_NODE_WIDTH, Math.min(MAX_NODE_WIDTH, width)));
+            const clamped = Math.round(Math.max(MIN_NODE_WIDTH, Math.min(MAX_NODE_WIDTH, width ?? MIN_NODE_WIDTH)));
             if (project.notes[id]) {
-                project.notes[id].width = clamped === DEFAULT_NODE_WIDTH ? undefined : clamped;
+                project.notes[id].width = width === undefined ? undefined : clamped;
             }
             touch(); notify();
             return project;

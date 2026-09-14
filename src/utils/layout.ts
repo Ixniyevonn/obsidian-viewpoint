@@ -1,10 +1,10 @@
 import type { ProjectData, Spectrum } from "../types";
 import { DEFAULT_FONTS, measureTextHeight, type FontConfig } from "./textMeasure";
 
-const DEFAULT_NODE_WIDTH = 200;
+import { DEFAULT_NODE_WIDTH, noteWidth as resolvedNoteWidth } from "./nodeWidth";
 
 function noteWidth(project: ProjectData, noteId: string): number {
-    return project.notes[noteId]?.width ?? DEFAULT_NODE_WIDTH;
+    return resolvedNoteWidth(project.notes[noteId]);
 }
 
 function getConnectionsForDimension(
@@ -331,6 +331,7 @@ export function layoutEngine(
     // No dimension — flat grid fallback
     if (!dim || !activeDimensionId) {
         const colHeights = new Array(gridColumns).fill(0);
+        const columnWidth = Math.max(200, ...noteIds.map(id => noteWidth(project, id)));
         for (let i = 0; i < noteIds.length; i++) {
             let col = 0;
             for (let c = 1; c < gridColumns; c++) {
@@ -339,7 +340,7 @@ export function layoutEngine(
             const nw = noteWidth(project, noteIds[i]);
             const h = heightOf(noteIds[i]);
             result.nodes[noteIds[i]] = {
-                x: col * (DEFAULT_NODE_WIDTH + nodeGap),
+                x: col * (columnWidth + nodeGap),
                 y: colHeights[col],
                 width: nw,
                 height: h,

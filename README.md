@@ -23,7 +23,7 @@ Without spectra, connections between groups determine their arrangement in rows 
 
 A dimension can define an X-spectrum, a Y-spectrum, or the two spectra together. Groups use named stops on each active spectrum. The layout adjusts spacing to fit the content.
 
-The canvas combines HTML cards with SVG connections. Short descriptions support Markdown through the Obsidian renderer. Node widths range from 120 to 600 pixels, with a default of 200 pixels.
+The canvas combines HTML cards with SVG connections. Short descriptions support Markdown through the Obsidian renderer. Nodes automatically use 200, 320, or 440 pixels for up to 120, up to 300, or more visible title/description characters. Drag the right edge for a persistent manual width (120-600 pixels); nearby widths of notes in the same column snap within 8 screen pixels. Double-click the edge to restore automatic sizing.
 
 ## Start a project
 
@@ -51,7 +51,8 @@ Keyboard shortcuts below use Ctrl. The editor also accepts Cmd for selection, gr
 | Add or remove an item from the selection | Shift+click the item. |
 | Rename a node or group | Double-click its title or label. |
 | Edit a short description | Click the description. |
-| Resize a node | Drag the right edge of the card. |
+| Resize a node | Drag the right edge; nearby widths in the same column snap. |
+| Restore automatic width | Double-click the right edge. |
 | Move a node to a group | Drag the node into that group. |
 | Remove a node from its group | Drag the node outside the named groups. |
 | Delete selected nodes or groups | Use Delete or Backspace. Group deletion leaves its notes ungrouped. |

@@ -578,6 +578,9 @@
       {#each Object.entries(layout.nodes) as [noteId, pos] (noteId)}
         <NodeCard
           width={pos.width}
+          columnWidths={Object.entries(layout.nodes)
+            .filter(([id, node]) => id !== noteId && Math.abs(node.x - pos.x) < 1)
+            .map(([, node]) => node.width)}
           height={pos.height}
           x={pos.x}
           y={pos.y}

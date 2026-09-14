@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { snapNodeWidth } from "../utils/nodeWidth";
   import type { App, Component } from "obsidian";
   import {
     MAX_NODE_WIDTH,
@@ -11,6 +12,7 @@
 
   interface Props {
     width: number;
+    columnWidths: number[];
     height: number;
     x: number;
     y: number;
@@ -27,6 +29,7 @@
 
   const {
     width,
+    columnWidths,
     height,
     x,
     y,
@@ -324,7 +327,7 @@
 
   function onResizeMove(e: PointerEvent) {
     if (!isResizing) return;
-    const vp = document.querySelector(".canvas-viewport") as HTMLElement;
+    const vp = cardEl?.closest(".canvas-viewport") as HTMLElement;
     const zoom = vp
       ? parseFloat(vp.style.getPropertyValue("--zoom") || "1")
       : 1;
@@ -333,7 +336,7 @@
       MIN_NODE_WIDTH,
       Math.min(MAX_NODE_WIDTH, resizeStartWidth + dx),
     );
-    project.updateNoteWidth(noteId, newWidth);
+    project.updateNoteWidth(noteId, snapNodeWidth(newWidth, columnWidths, zoom));
   }
 
   function onResizeUp(_e: PointerEvent) {
@@ -413,7 +416,9 @@
   </div>
 
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="resize-handle" onpointerdown={handleResizePointerDown}></div>
+  <div class="resize-handle" title="Drag to resize; double-click for automatic width"
+    onpointerdown={handleResizePointerDown}
+    ondblclick={(e) => { e.stopPropagation(); project.updateNoteWidth(noteId, undefined); }}></div>
 </Node>
 
 <style>
