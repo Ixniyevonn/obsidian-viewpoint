@@ -6,6 +6,25 @@ A dimension defines groups and directed connections between notes. For example, 
 
 Each project uses one `.viewpoint` file in your vault. The file contains YAML data. The plugin saves changes through Obsidian.
 
+## Installation
+
+Requires Obsidian 1.7.2 or newer. The plugin is listed as **Viewpoint**; its stable ID is `obsidian-viewpoint`.
+
+### BRAT
+
+Once the first GitHub release is published:
+
+1. Install and enable [BRAT](https://github.com/TfTHacker/obsidian42-brat) from Community plugins.
+2. Run **BRAT: Add a beta plugin for testing**.
+3. Enter `Ixniyevonn/obsidian-viewpoint` and choose the latest version.
+4. Enable **Viewpoint** in **Settings > Community plugins**.
+
+BRAT installs the release assets and can keep the plugin updated. This does not require a listing in the Obsidian community plugin directory. See the [BRAT developer guide](https://github.com/TfTHacker/obsidian42-brat/blob/main/BRAT-DEVELOPER-GUIDE.md) for release behavior.
+
+### Manual installation
+
+Download `main.js`, `manifest.json`, and `styles.css` from the same [GitHub release](https://github.com/Ixniyevonn/obsidian-viewpoint/releases). Put all three files in `<vault>/.obsidian/plugins/obsidian-viewpoint/`, reload Obsidian, and enable **Viewpoint**. GitHub's automatic source-code archives do not contain the built plugin.
+
 ## Concepts and layout
 
 | Term | Meaning |
@@ -100,30 +119,40 @@ The [example file](example.viewpoint) contains six notes across three dimensions
 
 Node positions, viewport settings, selections, and undo history are not part of the file format.
 
-## Build and install
+## Development
 
-Development requires Bun and Obsidian.
+Use **Bun 1.3.14**, matching `packageManager` and CI. Install the locked dependencies:
 
-1. Install the dependencies:
+```sh
+bun install --frozen-lockfile
+bun run git:check
+```
 
-   ```sh
-   bun install
-   ```
+| Command | Purpose |
+| --- | --- |
+| `bun run dev` | Watch sources and rebuild into the test vault with inline source maps. |
+| `bun run build:dev` | Make one development build. |
+| `bun run build` | Create a clean production build and copy it into the test vault. |
+| `bun run test` / `bun run test:watch` | Run unit and release validation tests once or in watch mode. |
+| `bun run check` | Check Svelte and TypeScript, including release scripts and tests. |
+| `bun run lint` / `bun run lint:fix` | Run Biome without changes, or apply its safe fixes. |
+| `bun run format` | Format source, release scripts, and tests. |
+| `bun run verify:release` | Check root/public metadata, package version, and CI release tag. |
+| `bun run verify:artifacts` | Verify the production bundle and metadata in `build/`. |
+| `bun run git:check` | Run metadata checks, tests, type checks, lint, build, and artifact checks. |
+| `bun run release:prepare -- 1.0.1` | Prepare the next version across all metadata files. |
 
-2. Build the plugin:
+Production output is `build/main.js`, `build/styles.css`, `build/manifest.json`, and `build/versions.json`. Production bundles have no source maps. Both build modes write the plugin to `test-vault/.obsidian/plugins/obsidian-viewpoint/` and preserve local plugin settings.
 
-   ```sh
-   bun run build
-   ```
+Open `test-vault` as a vault in Obsidian, enable **Viewpoint**, and open `Feature demo.viewpoint`. Reload the plugin or Obsidian after rebuilding. Hot Reload is optional and must be installed separately; third-party plugins and vault settings are not tracked. If migrating an older checkout, remove the obsolete `obsidian-viewpoint-plugin` folder after preserving any local settings, so only one copy of the plugin is loaded.
 
-3. Create `.obsidian/plugins/obsidian-viewpoint/` inside your vault.
-4. Copy `main.js`, `manifest.json`, and `styles.css` from `build/` into that folder.
-5. Reload Obsidian.
-6. Enable **Obsidian Viewpoint Plugin** in **Settings > Community plugins**.
+The project uses Biome 2.4's full Svelte support. Existing lint/type-check warnings remain visible; errors fail validation. Changes to keyboard and pointer interactions also need a smoke test in Obsidian: open the demo, edit a description, resize/reset a card, switch dimensions, follow a document/heading link, and reload to confirm saving.
 
-For development, run `bun run dev`. Vite watches the source files and writes the plugin into `test-vault/.obsidian/plugins/obsidian-viewpoint-plugin/`. Reload the plugin in Obsidian after a rebuild.
+## Publishing
 
-Run `bun run check` for Svelte and TypeScript checks. Run `bun run format` to format the source files.
+[GIT_WORKFLOW.md](GIT_WORKFLOW.md) covers first-time GitHub setup, normal commits, and BRAT releases. Version `1.0.0` is prepared locally; a GitHub release must be published before BRAT can install it.
+
+Push a tag matching the manifest version exactly, without `v`. GitHub Actions validates the tagged commit, then publishes a release containing `main.js`, `manifest.json`, and `styles.css`. Pull requests and pushes to `main` run the same checks and produce a downloadable build artifact without creating a release.
 
 ## Source files
 
@@ -137,6 +166,13 @@ Run `bun run check` for Svelte and TypeScript checks. Run `bun run format` to fo
 | `src/utils/helpers.ts` | YAML reader and writer. |
 | `src/utils/layout.ts` | Node and group layout. |
 | `src/utils/textMeasure.ts` | Text measurements for node sizes. |
-| `public/manifest.json` | Plugin metadata. |
+| `manifest.json` / `versions.json` | Canonical release metadata. |
+| `public/` | Synchronized metadata copied into builds by Vite. |
+| `scripts/` | Release preparation and verification. |
+| `.github/workflows/release.yml` | CI validation and tagged releases. |
 
 The project uses TypeScript, Svelte 5, CSS, Vite, and `js-yaml`. The `@chenglou/pretext` library estimates text sizes for layout.
+
+## License
+
+[MIT](LICENSE), matching the Mermaid Inspector project.

@@ -35,7 +35,7 @@
 <div class="axis-switcher">
   {#each visibleIds as id (id)}
     {@const isActive = id === ui.activeDimensionId}
-    <button
+    <button type="button"
       class="axis-pill"
       class:active={isActive}
       onclick={() => (ui.activeDimensionId = id)}
@@ -57,14 +57,14 @@
   {/if}
 
   {#if ui.activeDimensionId}
-    <button
+    <button type="button"
       class="axis-edit"
       onclick={() => onOpenDialog("edit")}
       title="Edit dimension">✎</button
     >
   {/if}
 
-  <button
+  <button type="button"
     class="axis-add"
     onclick={() => onOpenDialog("create")}
     title="New dimension">+</button

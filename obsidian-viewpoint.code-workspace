@@ -1,71 +1,64 @@
 {
-    "folders": [
-        {
-            "path": "."
-        }
-    ],
-    "settings": {
-        "editor.defaultFormatter": "esbenp.prettier-vscode",
-        "editor.formatOnSave": true,
-        "[scss]": {
-            "editor.defaultFormatter": "esbenp.prettier-vscode",
-            "editor.formatOnSave": true,
-            "editor.formatOnSaveMode": "file" // ensures full file, not just selection
-        },
-        "workbench.editor.customLabels.patterns": {
-            "**/*.code-workspace": "workspace",
-            "**/index.mdx": "${dirname} (${extname})",
-            "**/*.svelte": "${dirname(1)}/${dirname(0)}",
-            "**/components/**/*.svelte": "${filename}.${extname}",
-        },
-        "workbench.editor.openPositioning": "right",
-        "svelte.enable-ts-plugin": true,
-        "svelte.plugin.svelte.compilerWarnings": {
-            "css_unused_selector": "ignore"
-        },
-        "workbench.editor.showTabs": "multiple",
-        "editor.codeActionsOnSave": {
-            "source.fixAll.eslint": "explicit",
-            "source.addMissingImports": "always",
-            "source.organizeImports": "always"
-        },
-        "typescript.preferences.importModuleSpecifier": "non-relative",
-        "javascript.preferences.importModuleSpecifier": "non-relative",
-        "js/ts.preferences.importModuleSpecifier": "non-relative",
-        "typescript.preferences.importModuleSpecifierEnding": "minimal",
-        "js/ts.preferences.importModuleSpecifierEnding": "minimal",
-        "eslint.probe": [
-            "javascript",
-            "javascriptreact",
-            "typescript",
-            "typescriptreact",
-            "svelte",
-            "json",
-            "css"
-        ],
-        "editor.insertSpaces": true,
-        "editor.tabSize": 4,
-        "editor.detectIndentation": false,
-        "[markdown]": {
-            "editor.formatOnSave": false
-        },
-        "[mdx]": {
-            "editor.formatOnSave": false
-        }
-    },
-    "tasks": {
-        "version": "2.0.0",
-        "tasks": [
-            {
-                "label": "Run Dev",
-                "command": "bun dev",
-                "type": "shell",
-                "presentation": {
-                    "reveal": "always",
-                    "panel": "new"
-                },
-                "group": "test"
-            },
-        ]
-    }
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"editor.defaultFormatter": "biomejs.biome",
+		"editor.formatOnSave": true,
+		"[scss]": {
+			"editor.defaultFormatter": "esbenp.prettier-vscode",
+			"editor.formatOnSave": true,
+			"editor.formatOnSaveMode": "file"
+		},
+		"workbench.editor.customLabels.patterns": {
+			"**/*.code-workspace": "workspace",
+			"**/index.mdx": "${dirname} (${extname})",
+			"**/*.svelte": "${dirname(1)}/${dirname(0)}",
+			"**/components/**/*.svelte": "${filename}.${extname}"
+		},
+		"workbench.editor.openPositioning": "right",
+		"svelte.enable-ts-plugin": true,
+		"workbench.editor.showTabs": "multiple",
+		"editor.codeActionsOnSave": {
+			"source.fixAll.biome": "explicit",
+			"source.organizeImports.biome": "explicit"
+		},
+		"typescript.preferences.importModuleSpecifier": "non-relative",
+		"javascript.preferences.importModuleSpecifier": "non-relative",
+		"js/ts.preferences.importModuleSpecifier": "non-relative",
+		"typescript.preferences.importModuleSpecifierEnding": "minimal",
+		"js/ts.preferences.importModuleSpecifierEnding": "minimal",
+		"editor.insertSpaces": true,
+		"editor.tabSize": 4,
+		"editor.detectIndentation": false,
+		"[markdown]": {
+			"editor.formatOnSave": false
+		},
+		"[mdx]": {
+			"editor.formatOnSave": false
+		}
+	},
+	"tasks": {
+		"version": "2.0.0",
+		"tasks": [
+			{
+				"label": "Run Dev",
+				"command": "bun run dev",
+				"type": "shell",
+				"presentation": {
+					"reveal": "always",
+					"panel": "new"
+				},
+				"group": "test"
+			},
+			{
+				"label": "Validate for publishing",
+				"command": "bun run git:check",
+				"type": "shell",
+				"group": "test"
+			}
+		]
+	}
 }

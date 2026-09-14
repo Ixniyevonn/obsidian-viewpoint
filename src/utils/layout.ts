@@ -503,8 +503,8 @@ function layoutWithSpectra(
 
     const xStopIndex = new Map<string, number>();
     const yStopIndex = new Map<string, number>();
-    if (xSpec) xSpec.stops.forEach((s, i) => xStopIndex.set(s, i));
-    if (ySpec) ySpec.stops.forEach((s, i) => yStopIndex.set(s, i));
+    if (xSpec) xSpec.stops.forEach((s, i) => { xStopIndex.set(s, i); });
+    if (ySpec) ySpec.stops.forEach((s, i) => { yStopIndex.set(s, i); });
 
     const xStopCount = xSpec ? xSpec.stops.length : 1;
     const yStopCount = ySpec ? ySpec.stops.length : 1;

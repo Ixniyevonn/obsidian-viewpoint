@@ -101,10 +101,8 @@
   function updateStop(axis: "x" | "y", idx: number, value: string) {
     if (axis === "x") {
       xStops[idx] = value;
-      xStops = xStops;
     } else {
       yStops[idx] = value;
-      yStops = yStops;
     }
   }
 
@@ -220,7 +218,7 @@
                     updateStop("x", i, (e.target as HTMLInputElement).value)}
                   placeholder={`Stop ${i + 1}`}
                 />
-                <button
+                <button type="button"
                   class="stop-remove"
                   onclick={() => removeStop("x", i)}
                   title="Remove stop"
@@ -228,7 +226,7 @@
                 >
               </div>
             {/each}
-            <button class="stop-add" onclick={() => addStop("x")}
+            <button type="button" class="stop-add" onclick={() => addStop("x")}
               >+ Add stop</button
             >
           </div>
@@ -294,7 +292,7 @@
                     updateStop("y", i, (e.target as HTMLInputElement).value)}
                   placeholder={`Stop ${i + 1}`}
                 />
-                <button
+                <button type="button"
                   class="stop-remove"
                   onclick={() => removeStop("y", i)}
                   title="Remove stop"
@@ -302,7 +300,7 @@
                 >
               </div>
             {/each}
-            <button class="stop-add" onclick={() => addStop("y")}
+            <button type="button" class="stop-add" onclick={() => addStop("y")}
               >+ Add stop</button
             >
           </div>
@@ -311,8 +309,8 @@
     </div>
 
     <div class="dialog-actions">
-      <button class="btn-cancel" onclick={() => onCancel()}>Cancel</button>
-      <button
+      <button type="button" class="btn-cancel" onclick={() => onCancel()}>Cancel</button>
+      <button type="button"
         class="btn-confirm"
         onclick={handleConfirm}
         disabled={!name.trim()}

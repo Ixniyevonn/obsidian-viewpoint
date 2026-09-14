@@ -40,7 +40,7 @@
     // Only update if changed to avoid infinite reactivity loops
     if (measuredHeights[id] !== h) {
       measuredHeights[id] = h;
-      measuredHeights = measuredHeights; // trigger reactivity
+
     }
   }
 
@@ -623,6 +623,7 @@
       {#if groupSnapTarget}
         <svg
           class="snap-crosshair"
+          aria-hidden="true"
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 1 1"
         >

@@ -620,7 +620,7 @@
     }
 </script>
 
-<svg
+<svg role="img" aria-label="Connections between notes"
     class="svg-connections"
     style:opacity={layerOpacity}
     xmlns="http://www.w3.org/2000/svg"

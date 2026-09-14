@@ -1,55 +1,71 @@
+﻿import { copyFileSync, mkdirSync } from "node:fs";
+import path from "node:path";
 import { svelte, vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 import builtins from "builtin-modules";
-import { pathToFileURL } from "url";
-import { PluginOption, defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
+import manifest from "./manifest.json";
 
-const setOutDir = (mode: string) => {
-    switch (mode) {
-        case "development":
-            return "./test-vault/.obsidian/plugins/obsidian-viewpoint-plugin";
-        case "production":
-            return "build";
-    }
-};
+const pluginDirectory = `test-vault/.obsidian/plugins/${manifest.id}`;
+const distributionFiles = [
+	"main.js",
+	"styles.css",
+	"manifest.json",
+	"versions.json",
+];
+
+function copyProductionBuild(): Plugin {
+	return {
+		name: "copy-production-build-to-test-vault",
+		closeBundle() {
+			mkdirSync(pluginDirectory, { recursive: true });
+			for (const file of distributionFiles) {
+				copyFileSync(
+					path.join("build", file),
+					path.join(pluginDirectory, file),
+				);
+			}
+			console.log(`Copied production build to ${pluginDirectory}`);
+		},
+	};
+}
 
 export default defineConfig(({ mode }) => {
-    return {
-        plugins: [
-            svelte({ preprocess: vitePreprocess() }) as PluginOption,
-        ],
-        build: {
-            lib: {
-                entry: "src/main",
-                formats: ["cjs"],
-            },
-            rollupOptions: {
-                output: {
-                    entryFileNames: "main.js",
-                    assetFileNames: "styles.css",
-                    sourcemapBaseUrl: pathToFileURL(
-                        `${__dirname}/test-vault/.obsidian/plugins/obsidian-viewpoint-plugin/`,
-                    ).toString(),
-                },
-                external: [
-                    "obsidian",
-                    "electron",
-                    "@codemirror/autocomplete",
-                    "@codemirror/collab",
-                    "@codemirror/commands",
-                    "@codemirror/language",
-                    "@codemirror/lint",
-                    "@codemirror/search",
-                    "@codemirror/state",
-                    "@codemirror/view",
-                    "@lezer/common",
-                    "@lezer/highlight",
-                    "@lezer/lr",
-                    ...builtins,
-                ],
-            },
-            outDir: setOutDir(mode),
-            emptyOutDir: false,
-            sourcemap: "inline",
-        },
-    };
+	const development = mode === "development";
+	return {
+		plugins: [
+			svelte({ preprocess: vitePreprocess() }),
+			...(!development ? [copyProductionBuild()] : []),
+		],
+		build: {
+			lib: { entry: "src/main.ts", formats: ["cjs"] },
+			outDir: development ? pluginDirectory : "build",
+			// The vault can contain settings and hot-reload markers. Never clear it.
+			emptyOutDir: !development,
+			sourcemap: development ? "inline" : false,
+			target: "es2022",
+			rollupOptions: {
+				output: {
+					entryFileNames: "main.js",
+					assetFileNames: "styles.css",
+					codeSplitting: false,
+				},
+				external: [
+					"obsidian",
+					"electron",
+					"@codemirror/autocomplete",
+					"@codemirror/collab",
+					"@codemirror/commands",
+					"@codemirror/language",
+					"@codemirror/lint",
+					"@codemirror/search",
+					"@codemirror/state",
+					"@codemirror/view",
+					"@lezer/common",
+					"@lezer/highlight",
+					"@lezer/lr",
+					...builtins,
+				],
+			},
+		},
+	};
 });
