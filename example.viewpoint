@@ -1,0 +1,232 @@
+meta:
+  name: The Shattered Kingdoms
+  created: '2025-01-15T10:30:00Z'
+  modified: '2026-09-13T12:51:55.346Z'
+dimensions:
+  narrative:
+    name: Narrative Role
+    groups:
+      - id: protagonists
+        name: Protagonists
+        x: null
+        'y': null
+      - id: antagonists
+        name: Antagonists
+        x: null
+        'y': null
+      - id: supporting
+        name: Supporting Cast
+        x: null
+        'y': null
+  political:
+    name: Political Alignment
+    x-spectrum:
+      name: Authority
+      poles:
+        - Rebel
+        - Crown
+      stops:
+        - rebel
+        - neutral
+        - loyalist
+        - crown
+    y-spectrum:
+      name: Methods
+      poles:
+        - Peaceful
+        - Violent
+      stops:
+        - diplomatic
+        - pragmatic
+        - militant
+    groups:
+      - id: northern-rebels
+        name: Northern Rebellion
+        x: rebel
+        'y': militant
+      - id: merchant-guild
+        name: Merchant Guild
+        x: neutral
+        'y': diplomatic
+      - id: royal-court
+        name: Royal Court
+        x: crown
+        'y': pragmatic
+      - id: inquisition
+        name: The Inquisition
+        x: loyalist
+        'y': militant
+  magic:
+    name: Magic System
+    x-spectrum:
+      name: Source
+      poles:
+        - Internal
+        - External
+      stops:
+        - innate
+        - learned
+        - granted
+        - artifact
+    groups:
+      - id: innate-users
+        name: Born Gifted
+        x: innate
+        'y': null
+      - id: scholars
+        name: Arcane Scholars
+        x: learned
+        'y': null
+      - id: clerics
+        name: Divine Servants
+        x: granted
+        'y': null
+      - id: artificers
+        name: Artificers
+        x: artifact
+        'y': null
+notes:
+  kira:
+    title: Kira Thornwood
+    short: Reluctant hero with innate fire magic, former blacksmith's apprentice caught between rebels and crown.
+    long: |
+      # Kira Thornwood
+
+      **Age:** 24  
+      **Role:** Protagonist, reluctant hero
+
+      ## Background
+      Former blacksmith's apprentice from the Northern village of Millhaven. 
+      Discovered her innate fire magic when raiders attacked her village.
+
+      ## Arc
+      Learning to control her powers while navigating the political 
+      minefield between rebels and crown.
+    membership:
+      narrative: protagonists
+      political: northern-rebels
+      magic: innate-users
+    connections:
+      narrative:
+        - to: valdric
+          label: hunted by
+        - to: elena
+          label: trained by
+      magic:
+        - to: temple-amulet
+          label: seeks
+    width: 260
+  valdric:
+    title: Lord Valdric
+    short: Grand Inquisitor who seeks to control or eliminate all magic users.
+    long: |
+      # Lord Valdric Ashmore
+
+      **Age:** 52  
+      **Role:** Primary Antagonist
+
+      Grand Inquisitor of the Crown. Believes magic users are 
+      abominations that must be controlled or eliminated.
+    membership:
+      narrative: antagonists
+      political: inquisition
+      magic: null
+    connections:
+      narrative:
+        - to: marcus
+          label: pursues
+      political:
+        - to: elena
+          label: suspects
+  elena:
+    title: Elena Brightwater
+    short: Court mage secretly aiding the rebellion; Kira's magic mentor.
+    long: |
+      # Elena Brightwater
+
+      Court mage who secretly sympathizes with the rebellion.
+      Teaches Kira to control her abilities.
+    membership:
+      narrative: supporting
+      political: royal-court
+      magic: scholars
+    connections:
+      narrative:
+        - to: valdric
+          label: secretly opposes
+      political:
+        - to: kira
+          label: aids
+      magic:
+        - to: kira
+          label: teaches
+  marcus:
+    title: Marcus the Red
+    short: Pragmatic rebel commander who views Kira's power as the key to winning.
+    long: |
+      # Marcus the Red
+
+      Leader of the Northern Rebellion. Pragmatic commander 
+      who sees Kira's power as key to victory.
+    membership:
+      narrative: supporting
+      political: northern-rebels
+      magic: null
+    connections:
+      narrative:
+        - to: kira
+          label: recruits
+      political:
+        - to: valdric
+          label: null
+  temple-amulet:
+    title: The Ember Heart
+    short: Ancient artifact that massively amplifies fire magic; sought by both factions.
+    long: |
+      # The Ember Heart
+
+      Ancient artifact said to amplify fire magic tenfold.
+      Both sides race to find it.
+    membership:
+      narrative: null
+      political: null
+      magic: artificers
+    connections:
+      magic:
+        - to: firestone
+          label: amplifies
+  firestone:
+    title: Firestone Magic
+    short: Emotion-driven fire magic system where passion must be balanced against self-destruction.
+    long: |
+      # Firestone Magic System
+
+      Magic flows from emotional intensity. Fire users must 
+      balance passion with control or risk self-immolation.
+    membership:
+      narrative: null
+      political: null
+      magic: innate-users
+    connections: {}
+node_order:
+  narrative:protagonists:
+    - kira
+  narrative:antagonists:
+    - valdric
+  narrative:supporting:
+    - elena
+    - marcus
+  political:northern-rebels:
+    - marcus
+    - kira
+  political:royal-court:
+    - elena
+  political:inquisition:
+    - valdric
+  magic:innate-users:
+    - kira
+    - firestone
+  magic:scholars:
+    - elena
+  magic:artificers:
+    - temple-amulet
