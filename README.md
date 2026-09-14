@@ -141,6 +141,8 @@ bun run git:check
 | `bun run verify:artifacts` | Verify the production bundle and metadata in `build/`. |
 | `bun run git:check` | Run metadata checks, tests, type checks, lint, build, and artifact checks. |
 | `bun run release:prepare -- 1.0.1` | Prepare the next version across all metadata files. |
+| `bun run release:publish` | Check and push the committed version to start an automated release. |
+| `bun run release:status` | Check the public release and its required assets. |
 
 Production output is `build/main.js`, `build/styles.css`, `build/manifest.json`, and `build/versions.json`. Production bundles have no source maps. Both build modes write the plugin to `test-vault/.obsidian/plugins/obsidian-viewpoint/` and preserve local plugin settings.
 
@@ -150,9 +152,23 @@ The project uses Biome 2.4's full Svelte support. Existing lint/type-check warni
 
 ## Publishing
 
-[GIT_WORKFLOW.md](GIT_WORKFLOW.md) covers first-time GitHub setup, normal commits, and BRAT releases. Version `1.0.0` is prepared locally; a GitHub release must be published before BRAT can install it.
+To publish the committed manifest version from a clean `main` branch:
 
-Push a tag matching the manifest version exactly, without `v`. GitHub Actions validates the tagged commit, then publishes a release containing `main.js`, `manifest.json`, and `styles.css`. Pull requests and pushes to `main` run the same checks and produce a downloadable build artifact without creating a release.
+```sh
+bun run release:publish
+```
+
+The script runs all checks and pushes the commit and version tag together.
+GitHub Actions then builds and publishes the release assets.
+You do not need GitHub CLI on this computer.
+Use `bun run release:publish --dry-run` to check without a tag or push.
+
+After the workflow finishes, run `bun run release:status` to check the public release.
+For the next version, run `bun run release:prepare -- 1.0.1` first.
+Commit the metadata changes before publication.
+
+See [Automated release scripts](GIT_WORKFLOW.md#automated-release-scripts) for each command, its requirements, and retry instructions.
+Pushes to `main` and pull requests run checks but do not publish a release without a version tag.
 
 ## Source files
 

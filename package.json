@@ -17,7 +17,9 @@
 		"test:watch": "bun test --watch ./src ./tests",
 		"format": "biome format --write ./src ./scripts ./tests",
 		"lint": "biome lint ./src ./scripts ./tests",
-		"lint:fix": "biome lint --write ./src ./scripts ./tests"
+		"lint:fix": "biome lint --write ./src ./scripts ./tests",
+		"release:publish": "bun run scripts/publish-release.ts",
+		"release:status": "bun run scripts/release-status.ts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.8",

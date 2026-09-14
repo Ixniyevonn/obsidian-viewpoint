@@ -2,7 +2,7 @@
 
 This project uses the Bun workflow from `obsidian-mermaid-inspector`.
 The target repository is `Ixniyevonn/obsidian-viewpoint`, with `main` as the default branch.
-The local preparation scripts do not create a GitHub remote or release.
+The preparation script changes local metadata. The publication script pushes a tag to start the release workflow.
 
 ## Commit rules
 
@@ -21,7 +21,89 @@ Replace the path placeholders below with the reviewed files.
 Do not stage temporary artifacts.
 Examine every path from `git diff --cached --name-only` before the commit.
 
-## First publication
+## Automated release scripts
+
+Run these commands from the repository root with Bun 1.3.14 and Git.
+Git must have permission to push to `origin`.
+You do not need GitHub CLI or a separate GitHub token on this computer.
+
+| Command | Action |
+| --- | --- |
+| `bun run release:prepare -- 1.0.1` | Update the package version and both copies of the manifest and compatibility map. |
+| `bun run release:publish --dry-run` | Check Git state and run all checks. Fetch remote metadata without a tag or push. |
+| `bun run release:publish` | Check, build, and push the current commit and version tag together. |
+| `bun run release:status` | Read the public GitHub release and check its three required assets. |
+
+### Publish the current version
+
+The current manifest already contains the version to publish.
+Commit all intended changes before this command.
+Keep independent changes in separate commits.
+
+```sh
+bun run release:publish
+```
+
+The script requires a clean working tree on `main` and a GitHub `origin` remote.
+It rejects an existing remote version tag.
+It fetches remote `main` and makes sure that its history is part of the current commit.
+Then it runs `bun run git:check` and checks the working tree again.
+
+After the checks pass, the script creates the manifest version tag.
+It pushes the exact commit to `main` and the tag in one atomic operation.
+It does not force-push, stage files, create commits, or change the version.
+The local command ends after the push.
+GitHub Actions then runs the checks and publishes the release with generated notes.
+The release contains `main.js`, `manifest.json`, and `styles.css`.
+
+Check the result after the workflow finishes:
+
+```sh
+bun run release:status
+```
+
+The status command prints the release URL when all three assets exist and contain data.
+It returns a nonzero exit code if the release is not public or an asset is missing.
+If the workflow is still active, wait before you run the status command again.
+Use the Actions URL from the publication command to inspect a failed workflow.
+A successful push alone does not mean that GitHub published the release.
+
+### Prepare the next version
+
+Choose an unused stable version above the last published version.
+Run the preparation script:
+
+```sh
+bun run release:prepare -- 1.0.1
+```
+
+The script changes five files and preserves historical compatibility entries.
+Review and commit only these version changes:
+
+```sh
+git diff -- package.json manifest.json public/manifest.json versions.json public/versions.json
+git add -- package.json manifest.json public/manifest.json versions.json public/versions.json
+git diff --cached --name-only
+git diff --cached
+git commit -m "chore: prepare release 1.0.1"
+bun run release:publish
+```
+
+To change the minimum Obsidian version, use `bun run release:prepare -- 1.1.0 1.8.0` instead.
+The preparation script does not commit or publish anything.
+
+### Retry a failed publication
+
+If the push fails, the local version tag can remain.
+The script accepts that tag on another attempt only if it points to the same commit.
+If the remote tag exists, inspect its Actions run instead of publishing the tag again.
+If the release already exists, prepare a new patch version.
+Do not move published tags or overwrite release assets.
+
+The status command reads public releases without authentication.
+For a private repository, inspect the workflow and release through an authenticated browser session.
+
+## Manual first publication
 
 1. Install the exact dependencies with Bun 1.3.14:
 
@@ -91,7 +173,7 @@ A push to `main` or a pull request validates metadata, runs tests, checks Svelte
 TypeScript, lints, builds, verifies release assets, and uploads an Actions artifact.
 It does not create a release or change the version.
 
-## Publish the next BRAT update
+## Manual alternative for the next BRAT update
 
 Choose an unused stable version higher than the latest published one:
 
