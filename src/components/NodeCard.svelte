@@ -82,28 +82,21 @@
     const report = () => onMeasured(noteId, element.offsetHeight + 4);
     const observer = new ResizeObserver(report);
     observer.observe(element);
-    report();
     return () => observer.disconnect();
   });
 
   $effect(() => {
     if (isEditingShort && shortInputEl) {
-      editValue = short;
-      requestAnimationFrame(() => {
-        shortInputEl?.focus();
-        shortInputEl?.select();
-        autoResizeShort();
-      });
+      shortInputEl.focus();
+      shortInputEl.select();
+      autoResizeShort();
     }
   });
 
   $effect(() => {
     if (isEditingTitle && titleInputEl && titleWrapperEl) {
-      titleEditValue = title;
-      requestAnimationFrame(() => {
-        titleInputEl?.focus();
-        titleInputEl?.select();
-      });
+      titleInputEl.focus();
+      titleInputEl.select();
     }
   });
 
@@ -123,7 +116,8 @@
   function autoResizeShort() {
     if (!shortInputEl) return;
     shortInputEl.style.height = "auto";
-    shortInputEl.style.height = shortInputEl.scrollHeight + "px";
+    const borderHeight = shortInputEl.offsetHeight - shortInputEl.clientHeight;
+    shortInputEl.style.height = shortInputEl.scrollHeight + borderHeight + "px";
   }
 
   function handleClick(e: MouseEvent) {
@@ -192,6 +186,7 @@
     if (!e.shiftKey) {
       ui.selectNode(noteId, false);
     }
+    editValue = short;
     ui.editingShortId = noteId;
   }
 
@@ -205,6 +200,7 @@
     if (e.button !== 0 || isConnectingMode || isRetargeting) return;
     e.stopPropagation();
     captureH1Style();
+    titleEditValue = title;
     isEditingTitle = true;
   }
 
@@ -231,8 +227,12 @@
   }
 
   function handleContextMenu(e: MouseEvent) {
-    e.preventDefault();
     e.stopPropagation();
+    if (
+      e.target instanceof HTMLInputElement ||
+      e.target instanceof HTMLTextAreaElement
+    ) return;
+    e.preventDefault();
     ui.startConnection(noteId);
   }
 
