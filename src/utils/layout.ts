@@ -57,10 +57,12 @@ export interface LayoutOptions {
     groupPadding?: number;
     gridColumns?: number;
     fonts?: FontConfig;
+    /** Actual measured DOM heights keyed by noteId. Overrides estimation. */
+    measuredHeights?: Record<string, number>;
 }
 
 // ---------------------------------------------------------------------------
-// Node height via pretext
+// Node height estimation
 // ---------------------------------------------------------------------------
 
 const NODE_PAD_TOP = 12;
@@ -92,7 +94,7 @@ function estimateNodeHeight(
 }
 
 // ---------------------------------------------------------------------------
-// Group adjacency / BFS (unchanged)
+// Group adjacency / BFS
 // ---------------------------------------------------------------------------
 
 function buildGroupAdjacency(
@@ -267,7 +269,7 @@ function placeNodesInGroup(
     nodeGap: number,
     groupPadding: number,
     groupWidth: number,
-    fonts: FontConfig,
+    heightOf: (id: string) => number,
     result: LayoutResult,
 ): number {
     if (members.length === 0) {
@@ -279,12 +281,7 @@ function placeNodesInGroup(
 
     for (const noteId of members) {
         const nw = noteWidth(project, noteId);
-        const h = estimateNodeHeight(
-            project.notes[noteId].title,
-            project.notes[noteId].short,
-            nw,
-            fonts,
-        );
+        const h = heightOf(noteId);
         result.nodes[noteId] = {
             x: gx + groupPadding,
             y: cursorY,
@@ -313,10 +310,19 @@ export function layoutEngine(
         groupPadding = 40,
         gridColumns = 3,
         fonts = DEFAULT_FONTS,
+        measuredHeights = {},
     } = options;
 
     const result: LayoutResult = { nodes: {}, groups: {} };
     const noteIds = Object.keys(project.notes);
+
+    /** Use measured DOM height if available, otherwise estimate via pretext */
+    function heightOf(id: string): number {
+        if (measuredHeights[id] !== undefined) return measuredHeights[id];
+        const note = project.notes[id];
+        const nw = noteWidth(project, id);
+        return estimateNodeHeight(note.title, note.short, nw, fonts);
+    }
 
     const dim = activeDimensionId
         ? project.dimensions[activeDimensionId]
@@ -331,12 +337,7 @@ export function layoutEngine(
                 if (colHeights[c] < colHeights[col]) col = c;
             }
             const nw = noteWidth(project, noteIds[i]);
-            const h = estimateNodeHeight(
-                project.notes[noteIds[i]].title,
-                project.notes[noteIds[i]].short,
-                nw,
-                fonts,
-            );
+            const h = heightOf(noteIds[i]);
             result.nodes[noteIds[i]] = {
                 x: col * (DEFAULT_NODE_WIDTH + nodeGap),
                 y: colHeights[col],
@@ -380,7 +381,7 @@ export function layoutEngine(
             project, activeDimensionId, dim,
             buckets, ungrouped,
             xSpec ?? null, ySpec ?? null,
-            nodeGap, groupGap, groupPadding, fonts,
+            nodeGap, groupGap, groupPadding, fonts, measuredHeights,
         );
     }
 
@@ -390,7 +391,6 @@ export function layoutEngine(
     const allGroupIds = dim.groups.map((g) => g.id);
     if (ungrouped.length) allGroupIds.push("__ungrouped");
 
-    // Compute per-column max group width
     const connections = getConnectionsForDimension(project, activeDimensionId);
     const adj = buildGroupAdjacency(
         connections, project.notes, activeDimensionId, new Set(allGroupIds),
@@ -423,7 +423,6 @@ export function layoutEngine(
 
     const sortedCols = [...columns.keys()].sort((a, b) => a - b);
 
-    // Compute column X offsets
     const colXOffset = new Map<number, number>();
     let xAccum = 0;
     for (const col of sortedCols) {
@@ -448,7 +447,7 @@ export function layoutEngine(
             const gh = placeNodesInGroup(
                 members, project, x, cursorY,
                 nodeGap, groupPadding, gw,
-                fonts, result,
+                heightOf, result,
             );
 
             result.groups[groupId] = {
@@ -480,15 +479,22 @@ function layoutWithSpectra(
     groupGap: number,
     groupPadding: number,
     fonts: FontConfig,
+    measuredHeights: Record<string, number>,
 ): LayoutResult {
     const result: LayoutResult = { nodes: {}, groups: {} };
+
+    function heightOf(id: string): number {
+        if (measuredHeights[id] !== undefined) return measuredHeights[id];
+        const note = project.notes[id];
+        const nw = noteWidth(project, id);
+        return estimateNodeHeight(note.title, note.short, nw, fonts);
+    }
 
     function groupContentHeight(members: string[]): number {
         if (members.length === 0) return LABEL_H + groupPadding * 2;
         let h = LABEL_H + groupPadding;
         for (const noteId of members) {
-            const nw = noteWidth(project, noteId);
-            h += estimateNodeHeight(project.notes[noteId].title, project.notes[noteId].short, nw, fonts) + nodeGap;
+            h += heightOf(noteId) + nodeGap;
         }
         h = h - nodeGap + groupPadding;
         return h;
@@ -537,7 +543,6 @@ function layoutWithSpectra(
     const placed = groups.filter((g) => g.xIdx >= 0 && g.yIdx >= 0);
     const unplaced = groups.filter((g) => g.xIdx < 0 || g.yIdx < 0);
 
-    // Compute per-column max width
     const colMaxW = new Array(xStopCount).fill(DEFAULT_NODE_WIDTH + groupPadding * 2);
     for (const g of placed) {
         colMaxW[g.xIdx] = Math.max(colMaxW[g.xIdx], g.gw);
@@ -597,7 +602,7 @@ function layoutWithSpectra(
         const gh = placeNodesInGroup(
             g.members, project, gx, cellY,
             nodeGap, groupPadding, gw,
-            fonts, result,
+            heightOf, result,
         );
 
         result.groups[g.id] = {
@@ -616,7 +621,7 @@ function layoutWithSpectra(
         const gh = placeNodesInGroup(
             g.members, project, unplacedX, unplacedY,
             nodeGap, groupPadding, gw,
-            fonts, result,
+            heightOf, result,
         );
 
         result.groups[g.id] = {

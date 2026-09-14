@@ -22,6 +22,7 @@
     parentComponent: Component;
     ui: UiStore;
     project: ProjectStore;
+    onMeasured?: (id: string, height: number) => void;
   }
 
   const {
@@ -37,6 +38,7 @@
     parentComponent,
     ui,
     project,
+    onMeasured,
   }: Props = $props();
 
   const isSelected = $derived(ui.isSelected(noteId));
@@ -53,22 +55,39 @@
   let shortInputEl: HTMLTextAreaElement | undefined = $state();
   let editValue = $state("");
 
-  // --- Title editing ---
   let isEditingTitle = $state(false);
   let titleEditValue = $state("");
   let titleInputEl: HTMLInputElement | undefined = $state();
   let titleWrapperEl: HTMLDivElement | undefined = $state();
 
-  // --- Drag state ---
   let dragTracking = false;
   let dragStartClientX = 0;
   let dragStartClientY = 0;
   const DRAG_THRESHOLD = 5;
 
-  // --- Resize state ---
   let isResizing = $state(false);
   let resizeStartX = 0;
   let resizeStartWidth = 0;
+
+  // --- DOM height measurement ---
+  let cardEl: HTMLDivElement | undefined = $state();
+
+  /** After every render that could change content height, report actual DOM height */
+  $effect(() => {
+    // Track reactive dependencies that affect height
+    void title;
+    void short;
+    void width;
+    void isEditingShort;
+    void isEditingTitle;
+    if (!cardEl || !onMeasured) return;
+    // Use rAF to read after paint
+    requestAnimationFrame(() => {
+      if (cardEl) {
+        onMeasured(noteId, cardEl.offsetHeight);
+      }
+    });
+  });
 
   $effect(() => {
     if (isEditingShort && shortInputEl) {
@@ -93,15 +112,15 @@
 
   function captureH1Style() {
     if (!titleWrapperEl) return;
-    const h1 = titleWrapperEl.querySelector("h1");
-    if (!h1) return;
-    const cs = getComputedStyle(h1);
-    titleWrapperEl.style.setProperty("--h1-font-size", cs.fontSize);
-    titleWrapperEl.style.setProperty("--h1-font-weight", cs.fontWeight);
-    titleWrapperEl.style.setProperty("--h1-line-height", cs.lineHeight);
-    titleWrapperEl.style.setProperty("--h1-font-family", cs.fontFamily);
-    titleWrapperEl.style.setProperty("--h1-letter-spacing", cs.letterSpacing);
-    titleWrapperEl.style.setProperty("--h1-min-height", cs.height);
+    const h2 = titleWrapperEl.querySelector("h2");
+    if (!h2) return;
+    const cs = getComputedStyle(h2);
+    titleWrapperEl.style.setProperty("--h2-font-size", cs.fontSize);
+    titleWrapperEl.style.setProperty("--h2-font-weight", cs.fontWeight);
+    titleWrapperEl.style.setProperty("--h2-line-height", cs.lineHeight);
+    titleWrapperEl.style.setProperty("--h2-font-family", cs.fontFamily);
+    titleWrapperEl.style.setProperty("--h2-letter-spacing", cs.letterSpacing);
+    titleWrapperEl.style.setProperty("--h2-min-height", cs.height);
   }
 
   function autoResizeShort() {
@@ -296,7 +315,7 @@
     commitShortEdit();
   }
 
-  // --- Resize handle ---
+  // --- Resize ---
 
   function handleResizePointerDown(e: PointerEvent) {
     if (e.button !== 0) return;
@@ -311,7 +330,6 @@
 
   function onResizeMove(e: PointerEvent) {
     if (!isResizing) return;
-    // Account for canvas zoom: 1 CSS pixel of mouse movement = 1/zoom world pixels
     const vp = document.querySelector(".canvas-viewport") as HTMLElement;
     const zoom = vp
       ? parseFloat(vp.style.getPropertyValue("--zoom") || "1")
@@ -352,60 +370,60 @@
   onauxclick={handleAuxClick}
   onpointerdown={handlePointerDown}
 >
-  <div class="node-title" bind:this={titleWrapperEl}>
-    {#if isEditingTitle}
-      <input
-        bind:this={titleInputEl}
-        bind:value={titleEditValue}
-        class="title-edit"
-        onkeydown={handleTitleKeydown}
-        onblur={commitTitleEdit}
-        onclick={(e) => e.stopPropagation()}
-        ondblclick={(e) => e.stopPropagation()}
-      />
-    {:else}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <h1 ondblclick={handleTitleDblClick}>{title}</h1>
-    {/if}
+  <div class="node-card-inner" bind:this={cardEl}>
+    <div class="node-title" bind:this={titleWrapperEl}>
+      {#if isEditingTitle}
+        <input
+          bind:this={titleInputEl}
+          bind:value={titleEditValue}
+          class="title-edit"
+          onkeydown={handleTitleKeydown}
+          onblur={commitTitleEdit}
+          onclick={(e) => e.stopPropagation()}
+          ondblclick={(e) => e.stopPropagation()}
+        />
+      {:else}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <h2 ondblclick={handleTitleDblClick}>{title}</h2>
+      {/if}
+    </div>
+
+    <div class="node-body">
+      {#if isEditingShort}
+        <textarea
+          bind:this={shortInputEl}
+          bind:value={editValue}
+          class="short-edit"
+          onkeydown={handleShortKeydown}
+          onblur={handleShortBlur}
+          oninput={autoResizeShort}
+          onclick={(e) => e.stopPropagation()}
+          ondblclick={(e) => e.stopPropagation()}
+        ></textarea>
+      {:else}
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="short-text"
+          onclick={handleShortClick}
+          ondblclick={(e) => e.stopPropagation()}
+        >
+          {#if short}
+            <MarkdownContent {app} markdown={short} {parentComponent} />
+          {:else}
+            <span class="short-placeholder">Click to add description…</span>
+          {/if}
+        </div>
+      {/if}
+    </div>
   </div>
 
-  <div class="node-body">
-    {#if isEditingShort}
-      <textarea
-        bind:this={shortInputEl}
-        bind:value={editValue}
-        class="short-edit"
-        onkeydown={handleShortKeydown}
-        onblur={handleShortBlur}
-        oninput={autoResizeShort}
-        onclick={(e) => e.stopPropagation()}
-        ondblclick={(e) => e.stopPropagation()}
-      ></textarea>
-    {:else}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div
-        class="short-text"
-        onclick={handleShortClick}
-        ondblclick={(e) => e.stopPropagation()}
-      >
-        {#if short}
-          <MarkdownContent {app} markdown={short} {parentComponent} />
-        {:else}
-          <span class="short-placeholder">Click to add description…</span>
-        {/if}
-      </div>
-    {/if}
-  </div>
-
-  <!-- Resize handle -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="resize-handle" onpointerdown={handleResizePointerDown}></div>
 </Node>
 
 <style>
   :global(.node-card) {
-    padding: 8px 16px 12px;
     background-color: var(--background-primary);
     border-radius: var(--radius-m);
     border: 2px solid rgb(var(--canvas-color));
@@ -416,6 +434,10 @@
     transition:
       border-color 120ms ease,
       box-shadow 120ms ease;
+  }
+
+  .node-card-inner {
+    padding: 8px 16px 12px;
   }
 
   :global(.node-card:hover) {
@@ -469,7 +491,7 @@
     pointer-events: none;
   }
 
-  .node-title h1 {
+  .node-title h2 {
     margin: 0;
     padding: 0;
   }
@@ -486,12 +508,12 @@
     color: var(--text-normal);
     outline: none;
     box-sizing: border-box;
-    font-size: var(--h1-font-size, 2em);
-    font-weight: var(--h1-font-weight, 700);
-    line-height: var(--h1-line-height, 1.2);
-    font-family: var(--h1-font-family, inherit);
-    letter-spacing: var(--h1-letter-spacing, normal);
-    min-height: var(--h1-min-height, auto);
+    font-size: var(--h2-font-size, 2em);
+    font-weight: var(--h2-font-weight, 700);
+    line-height: var(--h2-line-height, 1.2);
+    font-family: var(--h2-font-family, inherit);
+    letter-spacing: var(--h2-letter-spacing, normal);
+    min-height: var(--h2-min-height, auto);
   }
 
   .node-body {

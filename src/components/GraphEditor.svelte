@@ -31,15 +31,28 @@
   let canvasAreaEl: HTMLDivElement | undefined = $state();
   let canvasRef: Canvas | undefined = $state();
 
-  // --- Dimension dialog state ---
   let dialogMode = $state<"create" | "edit" | null>(null);
+
+  // --- Measured DOM heights for accurate layout ---
+  let measuredHeights = $state<Record<string, number>>({});
+
+  function handleNodeMeasured(id: string, h: number) {
+    // Only update if changed to avoid infinite reactivity loops
+    if (measuredHeights[id] !== h) {
+      measuredHeights[id] = h;
+      measuredHeights = measuredHeights; // trigger reactivity
+    }
+  }
 
   $effect(() => {
     ui.reconcile(Object.keys(project.project.dimensions));
   });
 
   const layout = $derived(
-    layoutEngine(project.project, ui.activeDimensionId, { fonts }),
+    layoutEngine(project.project, ui.activeDimensionId, {
+      fonts,
+      measuredHeights,
+    }),
   );
 
   const activeDim = $derived(
@@ -110,7 +123,6 @@
       }
       ui.selectNode(id, false);
     } else {
-      // No group hit — create a new group at this position
       const groupId = generateId("grp");
       project.addGroup(ui.activeDimensionId, groupId, "New Group");
 
@@ -161,8 +173,6 @@
   let groupDragTrackingId: string | null = null;
   const GROUP_DRAG_THRESHOLD = 8;
 
-  // --- Track cursor in world space + update drag ghost ---
-
   function handlePointerMove(e: PointerEvent) {
     if (!canvasRef) return;
     const world = canvasRef.clientToWorld(e.clientX, e.clientY);
@@ -196,7 +206,6 @@
   }
 
   function handlePointerUp(_e: PointerEvent) {
-    // Node drag
     if (ui.isDraggingNode && ui.draggingNodeId) {
       const nodeId = ui.draggingNodeId;
       const wx = ui.dragGhostX;
@@ -223,7 +232,6 @@
       ui.endDrag();
     }
 
-    // Group drag (spectrum repositioning)
     if (draggingGroupId && ui.activeDimensionId && hasSpectra) {
       const xStop = findNearestXStop(groupDragGhostX);
       const yStop = findNearestYStop(groupDragGhostY);
@@ -240,8 +248,6 @@
     groupDragTracking = false;
     groupDragTrackingId = null;
   }
-
-  // --- Rename handler for groups ---
 
   function handleGroupRename(groupId: string, newName: string) {
     const dimId = ui.activeDimensionId;
@@ -418,7 +424,6 @@
   // --- Scroll-wheel axis switching ---
 
   function onWheel(e: WheelEvent) {
-    // Don't cycle dimensions when dialog is open or ctrl-zooming
     if (e.ctrlKey || dialogMode) return;
     const dimIds = Object.keys(project.project.dimensions);
     if (!dimIds.length) return;
@@ -584,6 +589,7 @@
           {parentComponent}
           {ui}
           {project}
+          onMeasured={handleNodeMeasured}
         />
       {/each}
 
