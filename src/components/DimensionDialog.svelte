@@ -186,7 +186,13 @@
                 placeholder="e.g. Individual"
               />
             </label>
-            <span class="pole-arrow">←→</span>
+            <span class="pole-arrow pole-arrow-x" aria-hidden="true">
+              <svg aria-hidden="true" viewBox="0 0 24 12" width="24" height="12">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <polyline points="7,2 3,6 7,10" />
+                <polyline points="17,2 21,6 17,10" />
+              </svg>
+            </span>
             <label class="field pole">
               <span class="field-label">Right pole</span>
               <input
@@ -260,7 +266,13 @@
                 placeholder="e.g. Simple"
               />
             </label>
-            <span class="pole-arrow">↑↓</span>
+            <span class="pole-arrow pole-arrow-y" aria-hidden="true">
+              <svg aria-hidden="true" viewBox="0 0 12 24" width="12" height="24">
+                <line x1="6" y1="3" x2="6" y2="21" />
+                <polyline points="2,7 6,3 10,7" />
+                <polyline points="2,17 6,21 10,17" />
+              </svg>
+            </span>
             <label class="field pole">
               <span class="field-label">Bottom pole</span>
               <input
@@ -371,6 +383,8 @@
     font-size: var(--font-ui-small);
     font-family: inherit;
     outline: none;
+    box-sizing: border-box;
+    min-width: 0;
   }
   .field-input:focus {
     border-color: var(--interactive-accent);
@@ -409,13 +423,31 @@
 
   .pole {
     flex: 1;
+    min-width: 0;
   }
 
   .pole-arrow {
-    padding-bottom: 8px;
-    color: var(--text-faint);
-    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: flex-end;
     flex-shrink: 0;
+    color: var(--text-faint);
+    line-height: 0;
+  }
+  .pole-arrow-x {
+    margin-bottom: 21px;
+  }
+  .pole-arrow-y {
+    margin-bottom: 17px;
+  }
+  .pole-arrow svg {
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
   .stops-section {
@@ -452,6 +484,7 @@
 
   .stop-input {
     flex: 1;
+    min-width: 0;
   }
 
   .stop-remove {
