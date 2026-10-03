@@ -62,6 +62,7 @@
 
   let shortInputEl: HTMLTextAreaElement | undefined = $state();
   let editValue = $state("");
+  let shortEditStyle = $state("");
 
   let isEditingTitle = $state(false);
   let titleEditValue = $state("");
@@ -116,6 +117,38 @@
     titleWrapperEl.style.setProperty("--h2-font-family", cs.fontFamily);
     titleWrapperEl.style.setProperty("--h2-letter-spacing", cs.letterSpacing);
     titleWrapperEl.style.setProperty("--h2-min-height", cs.height);
+  }
+
+  /**
+   * Copy the rendered short-description text style onto the edit textarea.
+   *
+   * The call runs before the editor replaces the rendered text. As a result,
+   * the editor uses the same font metrics and does not move the layout.
+   */
+  function captureShortStyle() {
+    if (!cardEl) return;
+    const rendered =
+      cardEl.querySelector<HTMLElement>(".short-text .markdown-rendered p") ??
+      cardEl.querySelector<HTMLElement>(".short-text .markdown-rendered");
+    const placeholder = cardEl.querySelector<HTMLElement>(
+      ".short-text .short-placeholder",
+    );
+    const target =
+      rendered ??
+      placeholder ??
+      cardEl.querySelector<HTMLElement>(".short-text");
+    if (!target) return;
+    const cs = getComputedStyle(target);
+    const parts = [
+      `font-size:${cs.fontSize}`,
+      `font-family:${cs.fontFamily}`,
+      `line-height:${cs.lineHeight}`,
+    ];
+    if (target !== placeholder) {
+      parts.push(`font-weight:${cs.fontWeight}`);
+      parts.push(`letter-spacing:${cs.letterSpacing}`);
+    }
+    shortEditStyle = parts.join(";");
   }
 
   function autoResizeShort() {
@@ -191,6 +224,7 @@
     if (!e.shiftKey) {
       ui.selectNode(noteId, false);
     }
+    captureShortStyle();
     editValue = short;
     ui.editingShortId = noteId;
   }
@@ -396,6 +430,8 @@
           bind:this={shortInputEl}
           bind:value={editValue}
           class="short-edit"
+          rows="1"
+          style={shortEditStyle}
           onkeydown={handleShortKeydown}
           onblur={handleShortBlur}
           oninput={autoResizeShort}
@@ -520,8 +556,8 @@
     margin: 0;
     padding: 0;
     border: none;
-    border-bottom: 2px solid var(--interactive-accent);
     border-radius: 0;
+    box-shadow: inset 0 -2px 0 var(--interactive-accent);
     background: transparent;
     color: var(--text-normal);
     outline: none;
@@ -560,16 +596,20 @@
   }
 
   .short-edit {
+    display: block;
     width: 100%;
-    padding: 4px;
-    border: 1px solid var(--interactive-accent);
+    margin: 0;
+    padding: 0;
+    border: none;
     border-radius: var(--radius-s);
-    background: var(--background-primary);
+    background: transparent;
     color: var(--text-normal);
-    font-size: var(--font-ui-small);
     font-family: inherit;
+    font-size: inherit;
+    line-height: var(--line-height-normal, 1.5);
     resize: none;
-    outline: none;
+    outline: 1px solid var(--interactive-accent);
+    outline-offset: 1px;
     overflow: hidden;
     box-sizing: border-box;
   }
