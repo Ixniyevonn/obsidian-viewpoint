@@ -110,12 +110,25 @@ Each note contains these fields:
 | `membership` | A mapping from dimension IDs to group IDs or `null`. |
 | `connections` | A mapping from dimension IDs to arrays of outgoing connections. |
 | `width` | Optional card width in pixels. |
+| `tags` | Optional array of tag strings. A tag can contain Markdown, including a link. |
 
 Use `""` for empty descriptions. Use YAML block scalars, such as `|`, for multiline Markdown. Use `{}` for empty membership or connection mappings.
 
 A note can belong to at most one group per dimension. A missing membership entry and an explicit `null` each mean ungrouped. Every non-null membership must identify a group in that dimension.
 
 For a custom width, write an integer from 120 to 600. Omit `width` for the default of 200. These limits match the resize control. The file reader does not clamp values.
+
+### Tags
+
+Each note can have an optional `tags` array. Each tag is a string. A tag can contain Markdown, including a link to another document. The editor shows the visible text of the tag. The editor gives the tag a color from that text. The same visible text always gives the same color. Omit `tags` for a note without tags. An empty array is the same as an omitted field. Do not add two tags with the same visible name to one note. The add control rejects a duplicate tag.
+
+```yaml
+kira:
+  title: Kira Thornwood
+  tags:
+    - '[[Demo Notes#Fire magic|Fire magic]]'
+    - Protagonist
+```
 
 ### Connections
 
@@ -192,10 +205,11 @@ Before you deliver a new or edited file:
 6. Make sure connection dimensions and target notes exist.
 7. Make sure spectrum poles, stops, and group positions meet the rules above.
 8. Make sure custom widths are integers from 120 to 600.
-9. Make sure order entries contain distinct notes from the specified group.
-10. Serialize the project.
-11. Parse the serialized YAML.
-12. Compare the parsed data before and after serialization.
+9. Make sure each note has at most one tag for a visible tag name.
+10. Make sure order entries contain distinct notes from the specified group.
+11. Serialize the project.
+12. Parse the serialized YAML.
+13. Compare the parsed data before and after serialization.
 
 Use `js-yaml` from the repository when you work in this project. The writer in `src/utils/helpers.ts` uses `lineWidth: -1`, `noRefs: true`, and `sortKeys: false`.
 

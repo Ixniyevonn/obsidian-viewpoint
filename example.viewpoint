@@ -102,6 +102,9 @@ notes:
       ## Arc
       Learning to control her powers while navigating the political 
       minefield between rebels and crown.
+    tags:
+      - '[[Demo Notes#Fire magic|Fire magic]]'
+      - Protagonist
     membership:
       narrative: protagonists
       political: northern-rebels
@@ -127,6 +130,8 @@ notes:
 
       Grand Inquisitor of the Crown. Believes magic users are 
       abominations that must be controlled or eliminated.
+    tags:
+      - Antagonist
     membership:
       narrative: antagonists
       political: inquisition
@@ -146,6 +151,9 @@ notes:
 
       Court mage who secretly sympathizes with the rebellion.
       Teaches Kira to control her abilities.
+    tags:
+      - '[[Demo Notes#Fire magic|Fire magic]]'
+      - Mentor
     membership:
       narrative: supporting
       political: royal-court

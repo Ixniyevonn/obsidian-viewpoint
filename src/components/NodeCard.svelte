@@ -9,6 +9,7 @@
   import type { UiStore } from "../stores/ui.svelte";
   import MarkdownContent from "./MarkdownContent.svelte";
   import Node from "./Node.svelte";
+  import TagList from "./TagList.svelte";
 
   interface Props {
     width: number;
@@ -21,6 +22,8 @@
     title: string;
     short: string;
     long: string;
+    tags: string[];
+    suggestions: string[];
     parentComponent: Component;
     ui: UiStore;
     project: ProjectStore;
@@ -38,6 +41,8 @@
     title,
     short,
     long,
+    tags,
+    suggestions,
     parentComponent,
     ui,
     project,
@@ -413,6 +418,16 @@
         </div>
       {/if}
     </div>
+
+    <TagList
+      {tags}
+      {suggestions}
+      {app}
+      sourcePath={project.sourcePath}
+      {parentComponent}
+      onAdd={(tag) => project.addNoteTag(noteId, tag)}
+      onRemove={(index) => project.removeNoteTag(noteId, index)}
+    />
   </div>
 
   <!-- svelte-ignore a11y_no_static_element_interactions -->

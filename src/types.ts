@@ -28,6 +28,7 @@ export interface Note {
     short: string;
     long: string;
     width?: number;
+    tags?: string[];
     membership: Record<string, string | null>;
     connections: Record<string, { to: string; label: string | null }[]>;
 }

@@ -2,6 +2,7 @@ import type { ProjectData, Spectrum } from "../types";
 import { createUndoManager } from "./undo";
 
 import { MIN_NODE_WIDTH, MAX_NODE_WIDTH } from "../utils/nodeWidth";
+import { tagNameFromMarkdown } from "../utils/tags";
 export { DEFAULT_NODE_WIDTH, MIN_NODE_WIDTH, MAX_NODE_WIDTH } from "../utils/nodeWidth";
 
 export function emptyProject(): ProjectData {
@@ -147,6 +148,30 @@ export function createProjectStore() {
             if (project.notes[id]) {
                 project.notes[id].width = width === undefined ? undefined : clamped;
             }
+            touch(); notify();
+            return project;
+        },
+
+        addNoteTag(id: string, tag: string) {
+            const note = project.notes[id];
+            const name = tagNameFromMarkdown(tag);
+            if (!note || !name) return project;
+            if (note.tags?.some((item) => tagNameFromMarkdown(item).toLowerCase() === name.toLowerCase())) {
+                return project;
+            }
+            snap();
+            if (!note.tags) note.tags = [];
+            note.tags.push(tag);
+            touch(); notify();
+            return project;
+        },
+
+        removeNoteTag(id: string, index: number) {
+            const note = project.notes[id];
+            if (!note?.tags || index < 0 || index >= note.tags.length) return project;
+            snap();
+            note.tags.splice(index, 1);
+            if (!note.tags.length) delete note.tags;
             touch(); notify();
             return project;
         },

@@ -32,9 +32,17 @@ export function deserializeProject(raw: string): ProjectData {
         delete (data as any).connections;
     }
 
-    // Ensure every note has connections object
+    // Ensure every note has connections object and a valid tag list
     for (const note of Object.values(data.notes)) {
         if (!note.connections) note.connections = {};
+        if (Array.isArray(note.tags)) {
+            note.tags = note.tags.filter(
+                (tag) => typeof tag === "string" && tag.trim().length > 0,
+            );
+        }
+        if (!Array.isArray(note.tags) || note.tags.length === 0) {
+            delete note.tags;
+        }
     }
 
     return data;

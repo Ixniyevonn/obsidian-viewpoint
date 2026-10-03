@@ -35,6 +35,7 @@ Download `main.js`, `manifest.json`, and `styles.css` from the same [GitHub rele
 | Group | A named container for notes in one dimension. |
 | Connection | A directed link between two notes in one dimension, with an optional label. |
 | Spectrum | An ordered scale that places groups along a horizontal or vertical axis. |
+| Tag | An optional colored label on a note card. A tag can contain a link to a document. |
 
 The layout controls node positions. Nodes form a vertical list inside each group. Notes without a group appear in an Ungrouped container.
 
@@ -43,6 +44,8 @@ Without spectra, connections between groups determine their arrangement in rows 
 A dimension can define an X-spectrum, a Y-spectrum, or the two spectra together. Groups use named stops on each active spectrum. The layout adjusts spacing to fit the content.
 
 The canvas combines HTML cards with SVG connections. Short descriptions support Markdown through the Obsidian renderer. Nodes automatically use 200, 320, or 440 pixels for up to 120, up to 300, or more visible title/description characters. Drag the right edge for a persistent manual width (120-600 pixels); nearby widths of notes in the same column snap within 8 screen pixels. Double-click the edge to restore automatic sizing.
+
+Cards can show colored tags below the description. Each tag is Markdown, so a tag can link to another document. The color comes from the visible name of the tag. The same name always has the same color. To add a tag, click the plus button on the card and type a name. The editor suggests the names of existing tags. An empty name adds no tag. To remove a tag, click the remove button on the tag.
 
 ## Obsidian links
 
@@ -74,6 +77,9 @@ Keyboard shortcuts below use Ctrl. The editor also accepts Cmd for selection, gr
 | Add or remove an item from the selection | Shift+click the item. |
 | Rename a node or group | Double-click its title or label. |
 | Edit a short description | Click the description. |
+| Add a tag | Click the plus button on the card, type a name, then press Enter. |
+| Add an existing tag | Click a suggestion from the list, or press Tab. |
+| Remove a tag | Click the remove button on the tag. |
 | Resize a node | Drag the right edge; nearby widths in the same column snap. |
 | Restore automatic width | Double-click the right edge. |
 | Move a node to a group | Drag the node into that group. |
@@ -110,6 +116,7 @@ These limits describe the current implementation:
 - Copy and cut controls store note identifiers, but paste is absent. Cut removes the selected notes.
 - The editor has no search overlay, minimap, group outline, or lasso selection.
 - Connection label edits affect the first matching connection in one direction. Endpoint changes can replace multiple matching connections with one connection.
+- Tags belong to the note. Every dimension shows the same tags. The editor cannot rename a tag or change its color.
 
 ## Write project files
 

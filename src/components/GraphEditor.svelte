@@ -7,6 +7,7 @@
   import type { Dimension, Spectrum } from "../types";
   import { generateId } from "../utils/helpers";
   import { layoutEngine } from "../utils/layout";
+  import { collectTagSuggestions } from "../utils/tags";
   import type { FontConfig } from "../utils/textMeasure";
   import { DEFAULT_FONTS, detectFonts } from "../utils/textMeasure";
   import AxisSwitcher from "./AxisSwitcher.svelte";
@@ -53,6 +54,10 @@
       fonts,
       measuredHeights,
     }),
+  );
+
+  const tagSuggestions = $derived(
+    collectTagSuggestions(project.project.notes),
   );
 
   const activeDim = $derived(
@@ -618,6 +623,8 @@
           title={project.project.notes[noteId].title}
           short={project.project.notes[noteId].short}
           long={project.project.notes[noteId].long}
+          tags={project.project.notes[noteId].tags ?? []}
+          suggestions={tagSuggestions}
           {parentComponent}
           {ui}
           {project}
