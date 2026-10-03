@@ -188,8 +188,7 @@
 >
   <div
     class="canvas-world"
-    style:zoom
-    style:translate="{panX / zoom}px {panY / zoom}px"
+    style:transform={`translate(${panX}px, ${panY}px) scale(${zoom})`}
   >
     {@render children?.()}
   </div>
@@ -220,6 +219,7 @@
     position: absolute;
     top: 0;
     left: 0;
+    transform-origin: 0 0;
     will-change: transform;
   }
 </style>
