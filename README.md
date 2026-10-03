@@ -32,7 +32,7 @@ Download `main.js`, `manifest.json`, and `styles.css` from the same [GitHub rele
 | Note | Shared content with a title, a short description, and a long description. |
 | Node | The card that shows a note on the canvas. |
 | Dimension | A view with its own groups, note memberships, and connections. |
-| Group | A named container for notes in one dimension. |
+| Group | A named container for notes in one dimension. A group can use one stop or a span of stops on a spectrum. |
 | Connection | A directed link between two notes in one dimension, with an optional label. |
 | Spectrum | An ordered scale that places groups along a horizontal or vertical axis. |
 | Tag | An optional colored label on a note card. A tag can contain a link to a document. |
@@ -42,6 +42,12 @@ The layout controls node positions. Nodes form a vertical list inside each group
 Without spectra, connections between groups determine their arrangement in rows and columns. Groups without connections use a horizontal row.
 
 A dimension can define an X-spectrum, a Y-spectrum, or the two spectra together. Groups use named stops on each active spectrum. The layout adjusts spacing to fit the content.
+
+A group can use one stop or more stops on one spectrum. A contiguous set of stops makes one box. A set with a gap makes one box for each run. The editor colors a group that uses more than one stop. The color comes from the group ID. Thus two groups with the same name stay different. A group spans one axis at a time. To set a span, hold Shift and drag the group to the last stop. The editor toggles the stops between the two ends. To move a group, drag its body.
+
+A group span can hold nodes at different stops. Drag a node to a stop in the group. The layout puts the node at that stop. The file stores the stop in the note.
+
+Two groups at the same stop share the cell. The layout stacks them in that cell and grows the row as necessary. A Y span claims its cells.
 
 The canvas combines HTML cards with SVG connections. Short descriptions support Markdown through the Obsidian renderer. Nodes automatically use 200, 320, or 440 pixels for up to 120, up to 300, or more visible title/description characters. A title that does not fit widens the node further, up to 600 pixels. The title then stays on one line.
 
@@ -97,6 +103,8 @@ Keyboard shortcuts below use Ctrl. The editor also accepts Cmd for selection, gr
 | Switch dimensions | Click a dimension button, or scroll without Ctrl. |
 | Select the next or previous dimension | Use Tab or Ctrl+Tab. |
 | Place a group on spectra | Drag the group to the desired stops. |
+| Span or detach group stops | Hold Shift, then drag the group along the axis. |
+| Place a node at a stop | Drag the node to a stop inside a group span. |
 | Pan the canvas | Drag the empty canvas, or drag with the middle mouse button. |
 | Zoom | Use Ctrl+scroll. |
 | Undo | Use Ctrl+Z. |
@@ -113,7 +121,8 @@ These limits describe the current implementation:
 
 - The file stores long descriptions, but the editor has no pane to view or edit them.
 - Middle-click marks a node as focused. Shift+middle-click can mark a second node. Focus does not recenter the canvas or calculate paths or opacity.
-- Node dragging changes group membership. It does not change the order inside a group.
+- Node dragging changes group membership and the node stop. It does not change the order inside a group.
+- A group spans one axis at a time. The editor gives the X axis priority, so an X span closes a Y span and a Y span waits while an X span is open.
 - The layout reads `node_order` for named groups. It ignores entries for ungrouped notes.
 - Copy and cut controls store note identifiers, but paste is absent. Cut removes the selected notes.
 - The editor has no search overlay, minimap, group outline, or lasso selection.
@@ -190,6 +199,8 @@ Pushes to `main` and pull requests run checks but do not publish a release witho
 | `src/types.ts` | Project types. |
 | `src/utils/helpers.ts` | YAML reader and writer. |
 | `src/utils/layout.ts` | Node and group layout. |
+| `src/utils/groupStops.ts` | Group stop sets and node placement. |
+| `src/utils/color.ts` | Stable colors for tags and groups. |
 | `src/utils/textMeasure.ts` | Text measurements for node sizes. |
 | `manifest.json` / `versions.json` | Canonical release metadata. |
 | `public/` | Synchronized metadata copied into builds by Vite. |

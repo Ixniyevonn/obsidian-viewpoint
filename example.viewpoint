@@ -42,7 +42,9 @@ dimensions:
     groups:
       - id: northern-rebels
         name: Northern Rebellion
-        x: rebel
+        x:
+          - rebel
+          - neutral
         'y': militant
       - id: merchant-guild
         name: Merchant Guild
@@ -109,6 +111,9 @@ notes:
       narrative: protagonists
       political: northern-rebels
       magic: innate-users
+    placement:
+      political:
+        x: rebel
     connections:
       narrative:
         - to: valdric
@@ -180,6 +185,9 @@ notes:
       narrative: supporting
       political: northern-rebels
       magic: null
+    placement:
+      political:
+        x: neutral
     connections:
       narrative:
         - to: kira

@@ -7,7 +7,7 @@ description: Create and edit .viewpoint YAML files for Obsidian Viewpoint. Use t
 
 Create `.viewpoint` files that the Obsidian Viewpoint plugin can open and edit. Use this skill for new projects and changes to existing projects.
 
-Read [example.viewpoint](example.viewpoint) when you need a populated example. It shows three dimensions, six notes, spectra, connections, group order, and a custom node width.
+Read [example.viewpoint](example.viewpoint) when you need a populated example. It shows three dimensions, six notes, spectra, connections, a group span, node placement, group order, and a custom node width.
 
 ## Create a project
 
@@ -71,8 +71,8 @@ Each group contains these fields:
 | --- | --- |
 | `id` | Stable group ID. |
 | `name` | Display name as a string. |
-| `x` | A stop name from `x-spectrum`, or `null`. |
-| `y` | A stop name from `y-spectrum`, or `null`. |
+| `x` | A stop name from `x-spectrum`, an array of stop names, or `null`. |
+| `y` | A stop name from `y-spectrum`, an array of stop names, or `null`. |
 
 A dimension can also contain `x-spectrum` and `y-spectrum`. Omit a spectrum field when that axis has no scale.
 
@@ -98,6 +98,8 @@ This fragment belongs inside `dimensions`. It has one horizontal spectrum and on
 
 Set each group position to a valid stop on each active spectrum when placement on the scale matters. Groups with missing positions appear outside the spectrum grid.
 
+A group can use more than one stop. A contiguous array, such as `[rebel, neutral]`, makes one box. A detached array, such as `[rebel, crown]`, makes one box for each run. Use `x` or `y` for a span, not both. Keep the array in spectrum order. Use a string for one stop, not a one-item array.
+
 ### Notes
 
 Each note contains these fields:
@@ -108,6 +110,7 @@ Each note contains these fields:
 | `short` | Short description as a string. The card renders Markdown. |
 | `long` | Long description as a string. The current editor has no pane for this content. |
 | `membership` | A mapping from dimension IDs to group IDs or `null`. |
+| `placement` | Optional mapping from a dimension ID to the stop of the note inside its group. |
 | `connections` | A mapping from dimension IDs to arrays of outgoing connections. |
 | `width` | Optional card width in pixels. |
 | `tags` | Optional array of tag strings. A tag can contain Markdown, including a link. |
@@ -115,6 +118,20 @@ Each note contains these fields:
 Use `""` for empty descriptions. Use YAML block scalars, such as `|`, for multiline Markdown. Use `{}` for empty membership or connection mappings.
 
 A note can belong to at most one group per dimension. A missing membership entry and an explicit `null` each mean ungrouped. Every non-null membership must identify a group in that dimension.
+
+A `placement` entry holds an `x` or `y` stop name. The note must belong to a group that uses more than one stop on that axis. The stop must be in the group set. The editor snaps a stop to the nearest stop of the group. Omit `placement` when the group uses one stop on that axis.
+
+```yaml
+kira:
+  title: Kira Thornwood
+  membership:
+    political: northern-rebels
+  placement:
+    political:
+      x: rebel
+```
+
+This fragment requires a `political` group with a span that contains the `rebel` stop.
 
 For a custom width, write an integer from 120 to 600. Omit `width` for the default of 200. These limits match the resize control. The file reader does not clamp values.
 
@@ -180,12 +197,12 @@ Read the existing file before you change it. Preserve content and fields outside
 | Change | Reference updates |
 | --- | --- |
 | Rename a display name | Change `name` or `title`. Keep its ID. |
-| Move a note | Change its membership in the target dimension. Update the affected group order arrays. |
+| Move a note | Change its membership and its `placement` in the target dimension. Update the affected group order arrays. |
 | Delete a note | Remove its object, incoming connections, and entries in all order arrays. |
-| Delete a group | Set its memberships to `null`. Remove its group object and order entry. |
-| Delete a dimension | Remove the dimension and its entries in all memberships, connections, and order keys. |
-| Rename a stop | Change the stop string and each group position that refers to it on that axis. |
-| Remove a spectrum | Remove its field. Set each group position on that axis to `null`. |
+| Delete a group | Set its memberships to `null`. Remove its group object, its order entry, and the placements of its notes in that dimension. |
+| Delete a dimension | Remove the dimension and its entries in all memberships, placements, connections, and order keys. |
+| Rename a stop | Change the stop string in each group set and each `placement` that refers to it on that axis. |
+| Remove a spectrum | Remove its field. Set each group position and placement on that axis to `null`. |
 
 If the user requests an ID change, update every reference to that ID in the same edit. Group references depend on their dimension.
 
@@ -201,9 +218,9 @@ Before you deliver a new or edited file:
 2. Make sure the four top-level fields exist with the types described above.
 3. Make sure timestamps remain strings and description fields contain strings.
 4. Make sure IDs are unique within their scope.
-5. Make sure memberships refer to existing dimensions and groups.
+5. Make sure memberships refer to existing dimensions and groups, and placements refer to a stop in the group set.
 6. Make sure connection dimensions and target notes exist.
-7. Make sure spectrum poles, stops, and group positions meet the rules above.
+7. Make sure spectrum poles, stops, group positions, and group spans meet the rules above, with one spanned axis at most.
 8. Make sure custom widths are integers from 120 to 600.
 9. Make sure each note has at most one tag for a visible tag name.
 10. Make sure order entries contain distinct notes from the specified group.
