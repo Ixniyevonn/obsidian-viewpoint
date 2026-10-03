@@ -1,11 +1,25 @@
 import { expect, test } from "bun:test";
-import { automaticNodeWidth, noteWidth, snapNodeWidth } from "./nodeWidth";
+import {
+    NODE_HORIZONTAL_CHROME,
+    automaticNodeWidth,
+    noteWidth,
+    snapNodeWidth,
+} from "./nodeWidth";
 
 test("automatic widths grow and shrink at the text boundaries", () => {
     for (const [length, width] of [[0, 200], [120, 200], [121, 320], [300, 320], [301, 440]]) {
         expect(automaticNodeWidth({ title: "", short: "a".repeat(length) })).toBe(width);
     }
     expect(automaticNodeWidth({ title: "", short: `[[${"a".repeat(400)}|short]]` })).toBe(200);
+});
+
+test("an automatic width grows until the title fits", () => {
+    expect(automaticNodeWidth({ title: "Long heading", short: "" }, 100)).toBe(200);
+    expect(automaticNodeWidth({ title: "Long heading", short: "" }, 500)).toBe(
+        500 + NODE_HORIZONTAL_CHROME,
+    );
+    const note = { title: "Long heading", short: "", long: "", membership: {}, connections: {} };
+    expect(noteWidth({ ...note, width: 200 }, 500)).toBe(200);
 });
 
 test("manual widths override automatic sizing, including the old default", () => {

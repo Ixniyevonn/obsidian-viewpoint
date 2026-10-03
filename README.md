@@ -43,7 +43,9 @@ Without spectra, connections between groups determine their arrangement in rows 
 
 A dimension can define an X-spectrum, a Y-spectrum, or the two spectra together. Groups use named stops on each active spectrum. The layout adjusts spacing to fit the content.
 
-The canvas combines HTML cards with SVG connections. Short descriptions support Markdown through the Obsidian renderer. Nodes automatically use 200, 320, or 440 pixels for up to 120, up to 300, or more visible title/description characters. Drag the right edge for a persistent manual width (120-600 pixels); nearby widths of notes in the same column snap within 8 screen pixels. Double-click the edge to restore automatic sizing.
+The canvas combines HTML cards with SVG connections. Short descriptions support Markdown through the Obsidian renderer. Nodes automatically use 200, 320, or 440 pixels for up to 120, up to 300, or more visible title/description characters. A title that does not fit widens the node further, up to 600 pixels. The title then stays on one line.
+
+Drag the right edge for a persistent manual width (120-600 pixels). The title wraps when the manual width is too small. Nearby widths of notes in the same column snap within 8 screen pixels. Double-click the edge to restore automatic sizing.
 
 Cards can show colored tags below the description. Each tag is Markdown, so a tag can link to another document. The color comes from the visible name of the tag. The same name always has the same color. To add a tag, click the plus button on the card and type a name. The editor suggests the names of existing tags. An empty name adds no tag. To remove a tag, click the remove button on the tag.
 

@@ -1,10 +1,29 @@
 import type { ProjectData, Spectrum } from "../types";
-import { DEFAULT_FONTS, measureTextHeight, type FontConfig } from "./textMeasure";
+import { DEFAULT_FONTS, measureTextHeight, measureTextWidth, type FontConfig } from "./textMeasure";
 
 import { DEFAULT_NODE_WIDTH, noteWidth as resolvedNoteWidth } from "./nodeWidth";
 
-function noteWidth(project: ProjectData, noteId: string): number {
-    return resolvedNoteWidth(project.notes[noteId]);
+/**
+ * Build a memoized width lookup for one layout pass.
+ *
+ * The function measures each title with the passed fonts and caches the result
+ * during the pass.
+ *
+ * @param project - The project data with the notes.
+ * @param fonts - The title and body font configuration.
+ * @returns A function that gives the card width for a note identifier.
+ */
+function makeWidthOf(project: ProjectData, fonts: FontConfig): (noteId: string) => number {
+    const widths = new Map<string, number>();
+    return (noteId: string) => {
+        let width = widths.get(noteId);
+        if (width === undefined) {
+            const note = project.notes[noteId];
+            width = resolvedNoteWidth(note, measureTextWidth(note.title, fonts.titleFont));
+            widths.set(noteId, width);
+        }
+        return width;
+    };
 }
 
 function getConnectionsForDimension(
@@ -245,12 +264,12 @@ function computeGroupPlacements(
 
 function groupWidthForMembers(
     members: string[],
-    project: ProjectData,
+    widthOf: (id: string) => number,
     groupPadding: number,
 ): number {
     let maxNw = DEFAULT_NODE_WIDTH;
     for (const id of members) {
-        maxNw = Math.max(maxNw, noteWidth(project, id));
+        maxNw = Math.max(maxNw, widthOf(id));
     }
     return maxNw + groupPadding * 2;
 }
@@ -263,13 +282,13 @@ const LABEL_H = 40;
 
 function placeNodesInGroup(
     members: string[],
-    project: ProjectData,
     gx: number,
     gy: number,
     nodeGap: number,
     groupPadding: number,
     groupWidth: number,
     heightOf: (id: string) => number,
+    widthOf: (id: string) => number,
     result: LayoutResult,
 ): number {
     if (members.length === 0) {
@@ -280,7 +299,7 @@ function placeNodesInGroup(
     let cursorY = startY;
 
     for (const noteId of members) {
-        const nw = noteWidth(project, noteId);
+        const nw = widthOf(noteId);
         const h = heightOf(noteId);
         result.nodes[noteId] = {
             x: gx + groupPadding,
@@ -315,12 +334,13 @@ export function layoutEngine(
 
     const result: LayoutResult = { nodes: {}, groups: {} };
     const noteIds = Object.keys(project.notes);
+    const widthOf = makeWidthOf(project, fonts);
 
     /** Use measured DOM height if available, otherwise estimate via pretext */
     function heightOf(id: string): number {
         if (measuredHeights[id] !== undefined) return measuredHeights[id];
         const note = project.notes[id];
-        const nw = noteWidth(project, id);
+        const nw = widthOf(id);
         return estimateNodeHeight(note.title, note.short, nw, fonts);
     }
 
@@ -331,13 +351,13 @@ export function layoutEngine(
     // No dimension — flat grid fallback
     if (!dim || !activeDimensionId) {
         const colHeights = new Array(gridColumns).fill(0);
-        const columnWidth = Math.max(200, ...noteIds.map(id => noteWidth(project, id)));
+        const columnWidth = Math.max(200, ...noteIds.map(id => widthOf(id)));
         for (let i = 0; i < noteIds.length; i++) {
             let col = 0;
             for (let c = 1; c < gridColumns; c++) {
                 if (colHeights[c] < colHeights[col]) col = c;
             }
-            const nw = noteWidth(project, noteIds[i]);
+            const nw = widthOf(noteIds[i]);
             const h = heightOf(noteIds[i]);
             result.nodes[noteIds[i]] = {
                 x: col * (columnWidth + nodeGap),
@@ -382,7 +402,7 @@ export function layoutEngine(
             project, activeDimensionId, dim,
             buckets, ungrouped,
             xSpec ?? null, ySpec ?? null,
-            nodeGap, groupGap, groupPadding, fonts, measuredHeights,
+            nodeGap, groupGap, groupPadding, fonts, widthOf, measuredHeights,
         );
     }
 
@@ -417,7 +437,7 @@ export function layoutEngine(
         let maxW = DEFAULT_NODE_WIDTH + groupPadding * 2;
         for (const gid of groupIds) {
             const members = gid === "__ungrouped" ? ungrouped : buckets[gid] || [];
-            maxW = Math.max(maxW, groupWidthForMembers(members, project, groupPadding));
+            maxW = Math.max(maxW, groupWidthForMembers(members, widthOf, groupPadding));
         }
         colMaxWidth.set(col, maxW);
     }
@@ -446,9 +466,9 @@ export function layoutEngine(
                     : (dim.groups.find((g) => g.id === groupId)?.name ?? "");
 
             const gh = placeNodesInGroup(
-                members, project, x, cursorY,
+                members, x, cursorY,
                 nodeGap, groupPadding, gw,
-                heightOf, result,
+                heightOf, widthOf, result,
             );
 
             result.groups[groupId] = {
@@ -480,6 +500,7 @@ function layoutWithSpectra(
     groupGap: number,
     groupPadding: number,
     fonts: FontConfig,
+    widthOf: (id: string) => number,
     measuredHeights: Record<string, number>,
 ): LayoutResult {
     const result: LayoutResult = { nodes: {}, groups: {} };
@@ -487,7 +508,7 @@ function layoutWithSpectra(
     function heightOf(id: string): number {
         if (measuredHeights[id] !== undefined) return measuredHeights[id];
         const note = project.notes[id];
-        const nw = noteWidth(project, id);
+        const nw = widthOf(id);
         return estimateNodeHeight(note.title, note.short, nw, fonts);
     }
 
@@ -528,7 +549,7 @@ function layoutWithSpectra(
             id: g.id, name: g.name, members,
             xIdx, yIdx,
             contentH: groupContentHeight(members),
-            gw: groupWidthForMembers(members, project, groupPadding),
+            gw: groupWidthForMembers(members, widthOf, groupPadding),
         });
     }
 
@@ -537,7 +558,7 @@ function layoutWithSpectra(
             id: "__ungrouped", name: "Ungrouped", members: ungrouped,
             xIdx: -1, yIdx: -1,
             contentH: groupContentHeight(ungrouped),
-            gw: groupWidthForMembers(ungrouped, project, groupPadding),
+            gw: groupWidthForMembers(ungrouped, widthOf, groupPadding),
         });
     }
 
@@ -601,9 +622,9 @@ function layoutWithSpectra(
         const gw = colMaxW[g.xIdx];
 
         const gh = placeNodesInGroup(
-            g.members, project, gx, cellY,
+            g.members, gx, cellY,
             nodeGap, groupPadding, gw,
-            heightOf, result,
+            heightOf, widthOf, result,
         );
 
         result.groups[g.id] = {
@@ -620,9 +641,9 @@ function layoutWithSpectra(
     for (const g of unplaced) {
         const gw = g.gw;
         const gh = placeNodesInGroup(
-            g.members, project, unplacedX, unplacedY,
+            g.members, unplacedX, unplacedY,
             nodeGap, groupPadding, gw,
-            heightOf, result,
+            heightOf, widthOf, result,
         );
 
         result.groups[g.id] = {

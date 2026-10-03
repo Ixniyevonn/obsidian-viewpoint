@@ -1,8 +1,11 @@
 import type { PreparedText } from "@chenglou/pretext";
-import { layout, prepare } from "@chenglou/pretext";
+import { layout, layoutWithLines, prepare, prepareWithSegments } from "@chenglou/pretext";
 
 // Cache keyed by "font\0text" → PreparedText
 const cache = new Map<string, PreparedText>();
+
+// Cache keyed by "font\0text" → measured single-line width
+const widthCache = new Map<string, number>();
 
 /**
  * Measure the height of text as it would wrap within maxWidth at the given lineHeight.
@@ -26,17 +29,43 @@ export function measureTextHeight(
 }
 
 /**
+ * Measure the width of text on one line in the given font.
+ *
+ * @param text - The text to measure. An empty text returns 0.
+ * @param font - The canvas font string, for example "bold 24px sans-serif".
+ * @returns The pixel width of the text on one line.
+ */
+export function measureTextWidth(text: string, font: string): number {
+    if (!text) return 0;
+
+    const key = `${font}\x00${text}`;
+    const cached = widthCache.get(key);
+    if (cached !== undefined) return cached;
+
+    const prepared = prepareWithSegments(text, font);
+    const { lines } = layoutWithLines(prepared, 1e9, 1);
+    const width = lines.length ? lines[0].width : 0;
+    widthCache.set(key, width);
+    return width;
+}
+
+/**
  * Evict cache entries whose text key is no longer in the live set.
  * Call periodically (e.g. on project load) to prevent unbounded growth.
  */
 export function pruneCache(liveTexts?: Set<string>) {
     if (!liveTexts) {
         cache.clear();
+        widthCache.clear();
         return;
     }
     for (const key of cache.keys()) {
         const text = key.slice(key.indexOf("\x00") + 1);
         if (!liveTexts.has(text)) cache.delete(key);
+    }
+    for (const key of widthCache.keys()) {
+        const text = key.slice(key.indexOf("\x00") + 1);
+        if (!liveTexts.has(text)) widthCache.delete(key);
     }
 }
 
