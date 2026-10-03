@@ -43,13 +43,15 @@ Without spectra, connections between groups determine their arrangement in rows 
 
 A dimension can define an X-spectrum, a Y-spectrum, or the two spectra together. Groups use named stops on each active spectrum. The layout adjusts spacing to fit the content.
 
-A group can use one stop or more stops on one spectrum. A contiguous set of stops makes one box. A set with a gap makes one box for each run. The editor colors a group that uses more than one stop. The color comes from the group ID. Thus two groups with the same name stay different. A group spans one axis at a time. To set a span, hold Shift and drag the group to the last stop. The editor toggles the stops between the two ends. To move a group, drag its body.
+A group is present in one or more cells. Each cell pairs a stop on the X-spectrum with a stop on the Y-spectrum. Cells that touch merge into one box. A group present in more than one cell gets a color from its name. The same name gives the same color. A duplicate name in one dimension gets its own color. To choose a color, click the colored dot on the group and pick a color, or choose **Automatic** to use the name color.
 
-A group span can hold nodes at different stops. Drag a node to a stop in the group. The layout puts the node at that stop. The file stores the stop in the note.
+To make a box bigger, drag a knob on its edge to the wanted stop. To place a copy of the group in another cell, hold Shift and drag the group to that cell. Drag a box body to move only that box. Select a box and press Delete to remove it; the group stays if another box remains.
 
-Two groups at the same stop share the cell. The layout stacks them in that cell and grows the row as necessary. A Y span claims its cells.
+A box can hold nodes at different stops. Drag a node to a stop in the box. The layout puts the node at that stop. The file stores the cell in the note.
 
-The canvas combines HTML cards with SVG connections. Short descriptions support Markdown through the Obsidian renderer. Nodes automatically use 200, 320, or 440 pixels for up to 120, up to 300, or more visible title/description characters. A title that does not fit widens the node further, up to 600 pixels. The title then stays on one line.
+Two groups at the same cell share it. The layout stacks them and grows the row as necessary. A box that covers several rows claims its cells.
+
+The canvas combines HTML cards with SVG connections. Short descriptions support Markdown through the Obsidian renderer. A note with no short description shows a pencil icon in its heading row and reserves no space for the description. Nodes automatically use 200, 320, or 440 pixels for up to 120, up to 300, or more visible title/description characters. A title that does not fit widens the node further, up to 600 pixels. The title then stays on one line.
 
 Drag the right edge for a persistent manual width (120-600 pixels). The title wraps when the manual width is too small. Nearby widths of notes in the same column snap within 8 screen pixels. Double-click the edge to restore automatic sizing.
 
@@ -57,7 +59,7 @@ Cards can show colored tags below the description. Each tag is Markdown, so a ta
 
 ## Obsidian links
 
-Internal links such as `[[Demo Notes]]`, `[[Demo Notes#Fire magic|training]]`, and `[training](Demo%20Notes.md#Fire%20magic)` open through Obsidian using the viewpoint file as their source. Ctrl/Cmd-click or middle-click opens a new tab; hover previews follow the core Page preview settings for Viewpoint. Click description text outside a link to edit it.
+Internal links such as `[[Demo Notes]]`, `[[Demo Notes#Fire magic|training]]`, and `[training](Demo%20Notes.md#Fire%20magic)` open through Obsidian using the viewpoint file as their source. Ctrl/Cmd-click or middle-click opens a new tab; hover previews follow the core Page preview settings for Viewpoint. Double-click description text outside a link to edit it.
 
 ## Start a project
 
@@ -66,7 +68,7 @@ Internal links such as `[[Demo Notes]]`, `[[Demo Notes#Fire magic|training]]`, a
 3. Double-click the empty canvas to create a group.
 4. Double-click inside the group to create a node.
 5. Double-click the node title to change its name.
-6. Click the short description to edit its text.
+6. Double-click the short description, or click the pencil icon, to edit its text.
 
 The folder context menu also contains **New viewpoint**. The **Viewpoint** ribbon button opens the graph view.
 
@@ -82,10 +84,11 @@ Keyboard shortcuts below use Ctrl. The editor also accepts Cmd for selection, gr
 | Group selected nodes | Select the nodes, then use Ctrl+G. |
 | Create a node | Double-click free space inside a group. |
 | Select a node or group | Click the card background or group label. |
-| Add or remove an item from the selection | Shift+click the item. |
+| Add or remove an item from the selection | Shift+click or Ctrl+click the item. |
 | Rename a node or group | Double-click its title or label. |
-| Edit a short description | Click the description. |
+| Edit a short description | Double-click the description, or click the pencil icon when none exists. |
 | Add a tag | Click the plus button on the card, type a name, then press Enter. |
+| Change a group color | Click the colored dot on a complex group, then pick a color. |
 | Add an existing tag | Click a suggestion from the list, or press Tab. |
 | Remove a tag | Click the remove button on the tag. |
 | Resize a node | Drag the right edge; nearby widths in the same column snap. |
@@ -102,9 +105,11 @@ Keyboard shortcuts below use Ctrl. The editor also accepts Cmd for selection, gr
 | Edit the active dimension | Click the pencil button above the canvas. |
 | Switch dimensions | Click a dimension button, or scroll without Ctrl. |
 | Select the next or previous dimension | Use Tab or Ctrl+Tab. |
-| Place a group on spectra | Drag the group to the desired stops. |
-| Span or detach group stops | Hold Shift, then drag the group along the axis. |
-| Place a node at a stop | Drag the node to a stop inside a group span. |
+| Move a group box | Drag the box body. |
+| Resize a group box | Drag an edge knob to the wanted stop. |
+| Place a copy of a group | Hold Shift, then drag the group to another cell. |
+| Remove one group box | Select the box, then use Delete or Backspace. |
+| Place a node at a stop | Drag the node to a stop inside a group box. |
 | Pan the canvas | Drag the empty canvas, or drag with the middle mouse button. |
 | Zoom | Use Ctrl+scroll. |
 | Undo | Use Ctrl+Z. |
@@ -122,7 +127,8 @@ These limits describe the current implementation:
 - The file stores long descriptions, but the editor has no pane to view or edit them.
 - Middle-click marks a node as focused. Shift+middle-click can mark a second node. Focus does not recenter the canvas or calculate paths or opacity.
 - Node dragging changes group membership and the node stop. It does not change the order inside a group.
-- A group spans one axis at a time. The editor gives the X axis priority, so an X span closes a Y span and a Y span waits while an X span is open.
+- Dragging a group box moves only that box. Use Shift+drag to add a box in another cell.
+- A box that covers several rows claims its cells. The layout stacks single-row boxes in shared cells.
 - The layout reads `node_order` for named groups. It ignores entries for ungrouped notes.
 - Copy and cut controls store note identifiers, but paste is absent. Cut removes the selected notes.
 - The editor has no search overlay, minimap, group outline, or lasso selection.

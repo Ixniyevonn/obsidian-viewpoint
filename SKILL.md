@@ -71,8 +71,8 @@ Each group contains these fields:
 | --- | --- |
 | `id` | Stable group ID. |
 | `name` | Display name as a string. |
-| `x` | A stop name from `x-spectrum`, an array of stop names, or `null`. |
-| `y` | A stop name from `y-spectrum`, an array of stop names, or `null`. |
+| `cells` | The cells where the group is present. Each cell has an `x` stop and a `y` stop. |
+| `color` | Optional color key for a group with more than one cell, such as `red`. Omit for the name color. |
 
 A dimension can also contain `x-spectrum` and `y-spectrum`. Omit a spectrum field when that axis has no scale.
 
@@ -90,15 +90,26 @@ alignment:
   groups:
     - id: royal-court
       name: Royal Court
-      x: crown
-      y: null
+      cells:
+        - x: crown
+          y: null
 ```
 
 This fragment belongs inside `dimensions`. It has one horizontal spectrum and one group.
 
-Set each group position to a valid stop on each active spectrum when placement on the scale matters. Groups with missing positions appear outside the spectrum grid.
+A `cells` entry is one position of the group. A cell pairs a stop from `x-spectrum` with a stop from `y-spectrum`. Use `null` for an axis that has no spectrum. Use `cells: []` when the dimension has no spectra. Cells that touch merge into one box along one axis. A group present in more than one cell appears as more than one box.
 
-A group can use more than one stop. A contiguous array, such as `[rebel, neutral]`, makes one box. A detached array, such as `[rebel, crown]`, makes one box for each run. Use `x` or `y` for a span, not both. Keep the array in spectrum order. Use a string for one stop, not a one-item array.
+```yaml
+    - id: northern-rebels
+      name: Northern Rebellion
+      cells:
+        - x: rebel
+          y: militant
+        - x: neutral
+          y: militant
+```
+
+This group covers two adjacent cells in one row. The editor shows one box across both stops. A cell at `x: crown` would be a detached box.
 
 ### Notes
 
@@ -119,7 +130,7 @@ Use `""` for empty descriptions. Use YAML block scalars, such as `|`, for multil
 
 A note can belong to at most one group per dimension. A missing membership entry and an explicit `null` each mean ungrouped. Every non-null membership must identify a group in that dimension.
 
-A `placement` entry holds an `x` or `y` stop name. The note must belong to a group that uses more than one stop on that axis. The stop must be in the group set. The editor snaps a stop to the nearest stop of the group. Omit `placement` when the group uses one stop on that axis.
+A `placement` entry names the cell of the note inside its group. Store an axis only when the group varies on that axis. The editor snaps a named stop to the nearest group cell. Omit `placement` when the group has one cell.
 
 ```yaml
 kira:
@@ -201,8 +212,8 @@ Read the existing file before you change it. Preserve content and fields outside
 | Delete a note | Remove its object, incoming connections, and entries in all order arrays. |
 | Delete a group | Set its memberships to `null`. Remove its group object, its order entry, and the placements of its notes in that dimension. |
 | Delete a dimension | Remove the dimension and its entries in all memberships, placements, connections, and order keys. |
-| Rename a stop | Change the stop string in each group set and each `placement` that refers to it on that axis. |
-| Remove a spectrum | Remove its field. Set each group position and placement on that axis to `null`. |
+| Rename a stop | Change the stop string in each group cell and each `placement` that refers to it on that axis. |
+| Remove a spectrum | Remove its field. Set the stop of each group cell and placement on that axis to `null`. |
 
 If the user requests an ID change, update every reference to that ID in the same edit. Group references depend on their dimension.
 
@@ -218,9 +229,9 @@ Before you deliver a new or edited file:
 2. Make sure the four top-level fields exist with the types described above.
 3. Make sure timestamps remain strings and description fields contain strings.
 4. Make sure IDs are unique within their scope.
-5. Make sure memberships refer to existing dimensions and groups, and placements refer to a stop in the group set.
+5. Make sure memberships refer to existing dimensions and groups, and placements refer to a cell in the group.
 6. Make sure connection dimensions and target notes exist.
-7. Make sure spectrum poles, stops, group positions, and group spans meet the rules above, with one spanned axis at most.
+7. Make sure spectrum poles, stops, and group cells meet the rules above. A cell stop must exist, or be `null` for an axis without a spectrum.
 8. Make sure custom widths are integers from 120 to 600.
 9. Make sure each note has at most one tag for a visible tag name.
 10. Make sure order entries contain distinct notes from the specified group.
