@@ -4,14 +4,19 @@
   import type DimGraphPlugin from "../main";
   import type { ProjectStore } from "../stores/project.svelte";
   import { createUiStore } from "../stores/ui.svelte";
-  import type { Dimension, ProjectData, Spectrum } from "../types";
+  import type { Dimension, GroupCell, Note, ProjectData, Spectrum } from "../types";
   import { generateId } from "../utils/helpers";
   import {
-    groupStopCount,
-    groupStopIndices,
-    groupStopSetFromIndices,
-    shiftGroupStopSet,
-    toggleGroupStopRun,
+    addCellIndex,
+    cellsToIndices,
+    clearNotePlacement,
+    decomposeGroupRuns,
+    indicesToCells,
+    placeNoteInGroup,
+    resizeRunCells,
+    shiftRunCells,
+    type CellIndex,
+    type GroupRun,
   } from "../utils/groupStops";
   import { layoutEngine } from "../utils/layout";
   import { collectTagSuggestions } from "../utils/tags";
@@ -20,6 +25,7 @@
   import AxisSwitcher from "./AxisSwitcher.svelte";
   import Canvas from "./Canvas.svelte";
   import DimensionDialog from "./DimensionDialog.svelte";
+  import GroupColorPopover from "./GroupColorPopover.svelte";
   import NodeCard from "./NodeCard.svelte";
   import NodeGroup from "./NodeGroup.svelte";
   import SpectrumOverlay from "./SpectrumOverlay.svelte";
@@ -53,6 +59,10 @@
   }
 
   $effect(() => {
+    if (ui.selectedNodeIds.size > 0) selectedBoxKey = null;
+  });
+
+  $effect(() => {
     ui.reconcile(Object.keys(project.project.dimensions));
   });
 
@@ -80,6 +90,22 @@
 
   function groupAtPoint(wx: number, wy: number): string | null {
     for (const box of layout.groupBoxes) {
+      if (
+        wx >= box.x &&
+        wx <= box.x + box.width &&
+        wy >= box.y &&
+        wy <= box.y + box.height
+      ) {
+        return box.groupId;
+      }
+    }
+    return null;
+  }
+
+  /** Return the named group under a point, or null for empty space. */
+  function namedGroupAtPoint(wx: number, wy: number): string | null {
+    for (const box of layout.groupBoxes) {
+      if (box.groupId === "__ungrouped") continue;
       if (
         wx >= box.x &&
         wx <= box.x + box.width &&
@@ -141,15 +167,13 @@
       if (hasSpectra) {
         const xStop = findNearestXStop(worldX);
         const yStop = findNearestYStop(worldY);
-        if (xStop !== null) {
-          project.setGroupStop(ui.activeDimensionId, groupId, "x", xStop);
-        }
-        if (yStop !== null) {
-          project.setGroupStop(ui.activeDimensionId, groupId, "y", yStop);
-        }
+        project.setGroupCells(ui.activeDimensionId, groupId, [
+          { x: xStop, y: yStop },
+        ]);
       }
 
       ui.selectGroup(groupId, false);
+      selectedBoxKey = null;
     }
   }
 
@@ -164,15 +188,32 @@
     }
     ui.clearPendingDelete();
     ui.clearSelection();
+    selectedBoxKey = null;
     ui.editingShortId = null;
   }
 
   // --- Group selection ---
 
-  function handleGroupSelect(groupId: string, e: MouseEvent) {
-    if (groupId === "__ungrouped") return;
+  function handleGroupSelect(box: GroupBoxLike, e: MouseEvent) {
+    if (box.groupId === "__ungrouped") return;
     ui.clearPendingDelete();
-    ui.selectGroup(groupId, e.shiftKey);
+    ui.selectGroup(box.groupId, e.shiftKey || e.ctrlKey || e.metaKey);
+    selectedBoxKey = boxKey(box);
+  }
+
+  /** Open the group color popover under the clicked color dot. */
+  function handleGroupColorClick(box: GroupBoxLike, e: MouseEvent) {
+    const dimId = ui.activeDimensionId;
+    const dim = dimId ? project.project.dimensions[dimId] : null;
+    const group = dim?.groups.find((item) => item.id === box.groupId);
+    if (!group) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    colorPopover = {
+      groupId: box.groupId,
+      x: Math.round(rect.left),
+      y: Math.round(rect.bottom + 6),
+      current: group.color,
+    };
   }
 
   // --- Group dragging state ---
@@ -183,13 +224,25 @@
   let groupDragStartY = $state(0);
   let groupDragTracking = false;
   let groupDragTrackingId: string | null = null;
-  let groupDragMode = $state<"move" | "toggle">("move");
+  let groupDragMode = $state<"move" | "proxy" | "resize">("move");
+  let groupDragRun = $state<GroupRun | null>(null);
   let groupDragAnchorXStop = $state<string | null>(null);
   let groupDragAnchorYStop = $state<string | null>(null);
-  let groupToggleAxis = $state<"x" | "y" | null>(null);
-  let groupToggleTargetStop = $state<string | null>(null);
   let groupMoveTargetXStop = $state<string | null>(null);
   let groupMoveTargetYStop = $state<string | null>(null);
+  let groupResizeAxis = $state<"x" | "y" | null>(null);
+  let groupResizeEdge = $state<"min" | "max" | null>(null);
+  let groupResizeTargetStop = $state<string | null>(null);
+  let selectedBoxKey = $state<string | null>(null);
+  let colorPopover = $state<{
+    groupId: string;
+    x: number;
+    y: number;
+    current?: string;
+  } | null>(null);
+  let nodeDropGroupId = $state<string | null>(null);
+  let nodeDropXStop = $state<string | null>(null);
+  let nodeDropYStop = $state<string | null>(null);
   const GROUP_DRAG_THRESHOLD = 8;
 
   function handlePointerMove(e: PointerEvent) {
@@ -199,6 +252,12 @@
 
     if (ui.isDraggingNode) {
       ui.updateDrag(world.x, world.y);
+      const target = namedGroupAtPoint(world.x, world.y);
+      if (target) {
+        nodeDropGroupId = target;
+        nodeDropXStop = findNearestXStop(world.x);
+        nodeDropYStop = findNearestYStop(world.y);
+      }
     }
 
     if (groupDragTracking && !draggingGroupId) {
@@ -216,41 +275,99 @@
       groupMoveTargetXStop = findNearestXStop(world.x);
       groupMoveTargetYStop = findNearestYStop(world.y);
 
-      if (groupDragMode === "toggle") {
-        const dx = Math.abs(world.x - groupDragStartX);
-        const dy = Math.abs(world.y - groupDragStartY);
-        if (layout.xSpectrum && dx >= dy) {
-          groupToggleAxis = "x";
-          groupToggleTargetStop = findNearestXStop(world.x);
-        } else if (layout.ySpectrum) {
-          groupToggleAxis = "y";
-          groupToggleTargetStop = findNearestYStop(world.y);
-        }
+      if (groupDragMode === "resize" && groupResizeAxis) {
+        groupResizeTargetStop =
+          groupResizeAxis === "x"
+            ? findNearestXStop(world.x)
+            : findNearestYStop(world.y);
       }
     }
   }
 
-  function handleGroupPointerDown(groupId: string, e: PointerEvent) {
-    if (e.button !== 0 || !hasSpectra || groupId === "__ungrouped") return;
+  interface GroupBoxLike {
+    groupId: string;
+    xFrom: number;
+    xTo: number;
+    yFrom: number;
+    yTo: number;
+  }
+
+  /** Return the stable key of a box. */
+  function boxKey(box: GroupBoxLike): string {
+    return `${box.groupId}:${box.xFrom},${box.yFrom}`;
+  }
+
+  /** Rebuild the run that a box covers. */
+  function runFromBox(box: GroupBoxLike): GroupRun {
+    const cells: CellIndex[] = [];
+    if (box.yFrom === box.yTo) {
+      for (let x = box.xFrom; x <= box.xTo; x++) {
+        cells.push({ xi: x, yi: box.yFrom });
+      }
+    } else {
+      for (let y = box.yFrom; y <= box.yTo; y++) {
+        cells.push({ xi: box.xFrom, yi: y });
+      }
+    }
+    return {
+      xFrom: box.xFrom,
+      xTo: box.xTo,
+      yFrom: box.yFrom,
+      yTo: box.yTo,
+      cells,
+    };
+  }
+
+  function handleGroupPointerDown(box: GroupBoxLike, e: PointerEvent) {
+    if (e.button !== 0 || !hasSpectra || box.groupId === "__ungrouped") return;
     const world = canvasRef?.clientToWorld(e.clientX, e.clientY) ?? {
       x: ui.cursorWorldX,
       y: ui.cursorWorldY,
     };
     groupDragTracking = true;
-    groupDragTrackingId = groupId;
+    groupDragTrackingId = box.groupId;
     groupDragStartX = world.x;
     groupDragStartY = world.y;
     groupDragAnchorXStop = findNearestXStop(world.x);
     groupDragAnchorYStop = findNearestYStop(world.y);
-    groupDragMode = e.shiftKey ? "toggle" : "move";
+    groupDragMode = e.shiftKey ? "proxy" : "move";
+    groupDragRun = runFromBox(box);
   }
 
   /**
-   * Compute the stop values that the group would have after this drag.
+   * Start a knob drag that resizes one box.
    *
-   * @returns The wanted X and Y values, the changed axis, or null.
+   * @param box - The box of the knob.
+   * @param axis - The spectrum axis of the knob.
+   * @param edge - The dragged edge of the run.
+   * @param e - The pointer event.
    */
-  function computePendingGroupStops() {
+  function handleGroupResizeStart(
+    box: GroupBoxLike,
+    axis: "x" | "y",
+    edge: "min" | "max",
+    e: PointerEvent,
+  ) {
+    if (e.button !== 0 || !hasSpectra || box.groupId === "__ungrouped") return;
+    const world = canvasRef?.clientToWorld(e.clientX, e.clientY) ?? {
+      x: ui.cursorWorldX,
+      y: ui.cursorWorldY,
+    };
+    draggingGroupId = box.groupId;
+    groupDragTracking = false;
+    groupDragMode = "resize";
+    groupDragRun = runFromBox(box);
+    groupResizeAxis = axis;
+    groupResizeEdge = edge;
+    groupResizeTargetStop =
+      axis === "x" ? findNearestXStop(world.x) : findNearestYStop(world.y);
+    groupDragStartX = world.x;
+    groupDragStartY = world.y;
+    selectedBoxKey = `${box.groupId}:${box.xFrom},${box.yFrom}`;
+  }
+
+  /** Compute the group cells that the current drag would produce. */
+  function computePendingCells(): GroupCell[] | null {
     if (!draggingGroupId) return null;
     const dimId = ui.activeDimensionId;
     if (!dimId) return null;
@@ -259,62 +376,103 @@
     if (!dim || !group) return null;
     const xStops = dim["x-spectrum"]?.stops ?? null;
     const yStops = dim["y-spectrum"]?.stops ?? null;
+    const indices = cellsToIndices(group.cells, xStops, yStops);
 
-    if (groupDragMode === "toggle") {
-      const axis = groupToggleAxis;
-      const target = groupToggleTargetStop;
-      const anchor = axis === "x" ? groupDragAnchorXStop : groupDragAnchorYStop;
+    if (groupDragMode === "resize") {
+      const run = groupDragRun;
+      const axis = groupResizeAxis;
+      const edge = groupResizeEdge;
+      const target = groupResizeTargetStop;
+      if (!run || !axis || !edge || !target) return null;
       const stops = axis === "x" ? xStops : yStops;
-      if (!axis || !target || !anchor || !stops) return null;
-      if (target === anchor) return null;
-      const fromIndex = stops.indexOf(anchor);
-      const toIndex = stops.indexOf(target);
-      if (fromIndex < 0 || toIndex < 0) return null;
-      const toggled = toggleGroupStopRun(group[axis], stops, fromIndex, toIndex);
-      let x = axis === "x" ? toggled : group.x;
-      let y = axis === "y" ? toggled : group.y;
-      if (groupStopCount(x, xStops) > 1 && groupStopCount(y, yStops) > 1) {
-        if (axis === "y") return null;
-        y = groupStopSetFromIndices([groupStopIndices(y, yStops)[0]], yStops);
-      }
-      return { x, y, changed: axis };
+      if (!stops) return null;
+      const targetIndex = stops.indexOf(target);
+      if (targetIndex < 0) return null;
+      return indicesToCells(
+        resizeRunCells(indices, run, axis, edge, targetIndex),
+        xStops,
+        yStops,
+      );
     }
 
-    let x = group.x;
-    let y = group.y;
+    if (groupDragMode === "proxy") {
+      const xCount = xStops ? xStops.length : 1;
+      const yCount = yStops ? yStops.length : 1;
+      const xi = xStops ? xStops.indexOf(groupMoveTargetXStop ?? "") : 0;
+      const yi = yStops ? yStops.indexOf(groupMoveTargetYStop ?? "") : 0;
+      if (xStops && (xi < 0 || xi >= xCount)) return null;
+      if (yStops && (yi < 0 || yi >= yCount)) return null;
+      const next = addCellIndex(indices, xi, yi);
+      if (next.length === indices.length) return null;
+      return indicesToCells(next, xStops, yStops);
+    }
+
+    const run = groupDragRun;
+    if (!run) return null;
+    const xCount = xStops ? xStops.length : 1;
+    const yCount = yStops ? yStops.length : 1;
+    let dx = 0;
+    let dy = 0;
     if (xStops && groupDragAnchorXStop && groupMoveTargetXStop) {
-      x = shiftGroupStopSet(
-        group.x,
-        xStops,
-        groupDragAnchorXStop,
-        groupMoveTargetXStop,
-      );
+      const from = xStops.indexOf(groupDragAnchorXStop);
+      const to = xStops.indexOf(groupMoveTargetXStop);
+      if (from >= 0 && to >= 0) dx = to - from;
     }
     if (yStops && groupDragAnchorYStop && groupMoveTargetYStop) {
-      y = shiftGroupStopSet(
-        group.y,
-        yStops,
-        groupDragAnchorYStop,
-        groupMoveTargetYStop,
-      );
+      const from = yStops.indexOf(groupDragAnchorYStop);
+      const to = yStops.indexOf(groupMoveTargetYStop);
+      if (from >= 0 && to >= 0) dy = to - from;
     }
-    return { x, y, changed: "both" as const };
+    if (dx === 0 && dy === 0) return null;
+    return indicesToCells(
+      shiftRunCells(indices, run, dx, dy, xCount, yCount),
+      xStops,
+      yStops,
+    );
   }
 
-  const pendingGroupStops = $derived.by(computePendingGroupStops);
+  const pendingCells = $derived.by(computePendingCells);
 
-  /** Apply a finished group drag: move the group or toggle a stop run. */
+  /** Apply a finished group drag. */
   function commitGroupDrag() {
     const dimId = ui.activeDimensionId;
-    const pending = computePendingGroupStops();
-    if (!dimId || !draggingGroupId || !pending) return;
-    project.moveGroup(
-      dimId,
-      draggingGroupId,
-      pending.x,
-      pending.y,
-      pending.changed,
+    const cells = computePendingCells();
+    if (!dimId || !draggingGroupId || !cells) return;
+    project.setGroupCells(dimId, draggingGroupId, cells);
+  }
+
+  /** Remove the selected box, or the group when it is the last box. */
+  function removeSelectedBox() {
+    const dimId = ui.activeDimensionId;
+    const key = selectedBoxKey;
+    if (!dimId || !key) return;
+    const [groupId, pos] = key.split(":");
+    const [xf, yf] = pos.split(",").map(Number);
+    const dim = project.project.dimensions[dimId];
+    const group = dim?.groups.find((g) => g.id === groupId);
+    if (!dim || !group) return;
+    const xStops = dim["x-spectrum"]?.stops ?? null;
+    const yStops = dim["y-spectrum"]?.stops ?? null;
+    const indices = cellsToIndices(group.cells, xStops, yStops);
+    const run = decomposeGroupRuns(indices).find(
+      (item) => item.xFrom === xf && item.yFrom === yf,
     );
+    if (!run) return;
+    const runKeys = new Set(run.cells.map((cell) => `${cell.xi},${cell.yi}`));
+    const remaining = indices.filter(
+      (cell) => !runKeys.has(`${cell.xi},${cell.yi}`),
+    );
+    if (remaining.length === 0) {
+      project.removeGroup(dimId, groupId);
+    } else {
+      project.setGroupCells(
+        dimId,
+        groupId,
+        indicesToCells(remaining, xStops, yStops),
+      );
+    }
+    selectedBoxKey = null;
+    ui.clearSelection();
   }
 
   function handlePointerUp(_e: PointerEvent) {
@@ -349,6 +507,9 @@
       }
 
       ui.endDrag();
+      nodeDropGroupId = null;
+      nodeDropXStop = null;
+      nodeDropYStop = null;
     }
 
     if (draggingGroupId && ui.activeDimensionId && hasSpectra) {
@@ -358,10 +519,12 @@
     draggingGroupId = null;
     groupDragTracking = false;
     groupDragTrackingId = null;
-    groupToggleAxis = null;
-    groupToggleTargetStop = null;
+    groupDragRun = null;
     groupMoveTargetXStop = null;
     groupMoveTargetYStop = null;
+    groupResizeAxis = null;
+    groupResizeEdge = null;
+    groupResizeTargetStop = null;
   }
 
   function handleGroupRename(groupId: string, newName: string) {
@@ -448,10 +611,12 @@
       if (draggingGroupId) {
         draggingGroupId = null;
         groupDragTracking = false;
-        groupToggleAxis = null;
-        groupToggleTargetStop = null;
+        groupDragRun = null;
         groupMoveTargetXStop = null;
         groupMoveTargetYStop = null;
+        groupResizeAxis = null;
+        groupResizeEdge = null;
+        groupResizeTargetStop = null;
         return;
       }
       if (ui.isDraggingNode) {
@@ -474,17 +639,25 @@
     }
 
     if (e.key === "Delete" || e.key === "Backspace") {
+      if (
+        ui.selectedNodeIds.size === 0 &&
+        selectedBoxKey &&
+        ui.activeDimensionId
+      ) {
+        e.preventDefault();
+        removeSelectedBox();
+        return;
+      }
       if (ui.hasSelection) {
         e.preventDefault();
-        for (const id of ui.selectedNodeIds) {
-          project.removeNote(id);
+        if (ui.selectedNodeIds.size > 0) {
+          project.removeNotes([...ui.selectedNodeIds]);
         }
-        if (ui.activeDimensionId) {
-          for (const gid of ui.selectedGroupIds) {
-            project.removeGroup(ui.activeDimensionId, gid);
-          }
+        if (ui.activeDimensionId && ui.selectedGroupIds.size > 0) {
+          project.removeGroups(ui.activeDimensionId, [...ui.selectedGroupIds]);
         }
         ui.clearSelection();
+        selectedBoxKey = null;
       }
       return;
     }
@@ -586,26 +759,62 @@
     }
   });
 
-  // --- Drag ghost derived ---
-  const dragGhost = $derived.by(() => {
-    if (!ui.draggingNodeId) return null;
-    const nodeLayout = layout.nodes[ui.draggingNodeId];
-    const note = project.project.notes[ui.draggingNodeId];
-    if (!nodeLayout || !note) return null;
-    return {
-      x: ui.dragGhostX - nodeLayout.width / 2,
-      y: ui.dragGhostY - nodeLayout.height / 2,
-      width: nodeLayout.width,
-      height: nodeLayout.height,
-      title: note.title,
+  /** Build a preview project with one note moved to a target group and cell. */
+  function applyNodeDrop(
+    base: ProjectData,
+    dimId: string,
+    noteId: string,
+    groupId: string | null,
+    xStop: string | null,
+    yStop: string | null,
+  ): ProjectData {
+    const note = base.notes[noteId];
+    if (!note) return base;
+    const copy: Note = {
+      ...note,
+      membership: { ...note.membership },
+      placement: note.placement ? { ...note.placement } : undefined,
     };
-  });
+    const dim = base.dimensions[dimId];
+    const group = groupId
+      ? dim?.groups.find((item) => item.id === groupId)
+      : undefined;
+    if (dim && group) {
+      placeNoteInGroup(
+        copy,
+        dimId,
+        group.cells,
+        xStop,
+        yStop,
+        dim["x-spectrum"]?.stops ?? null,
+        dim["y-spectrum"]?.stops ?? null,
+      );
+    } else {
+      clearNotePlacement(copy, dimId);
+    }
+    copy.membership[dimId] = group ? group.id : null;
+    return { ...base, notes: { ...base.notes, [noteId]: copy } };
+  }
 
-  /** Layout of the project after the current group drag, or null. */
+  /** Layout of the project after the current drag, or null. */
   const previewLayout = $derived.by(() => {
-    const pending = pendingGroupStops;
     const dimId = ui.activeDimensionId;
-    if (!pending || !dimId || !draggingGroupId) return null;
+    if (!dimId) return null;
+
+    if (ui.isDraggingNode && ui.draggingNodeId && nodeDropGroupId) {
+      const previewProject = applyNodeDrop(
+        project.project,
+        dimId,
+        ui.draggingNodeId,
+        nodeDropGroupId,
+        nodeDropXStop,
+        nodeDropYStop,
+      );
+      return layoutEngine(previewProject, dimId, { fonts, measuredHeights });
+    }
+
+    const cells = pendingCells;
+    if (!cells || !draggingGroupId) return null;
     const dim = project.project.dimensions[dimId];
     if (!dim) return null;
     const previewProject: ProjectData = {
@@ -615,9 +824,7 @@
         [dimId]: {
           ...dim,
           groups: dim.groups.map((g) =>
-            g.id === draggingGroupId
-              ? { ...g, x: pending.x, y: pending.y }
-              : g,
+            g.id === draggingGroupId ? { ...g, cells } : g,
           ),
         },
       },
@@ -625,23 +832,23 @@
     return layoutEngine(previewProject, dimId, { fonts, measuredHeights });
   });
 
+  /** The layout to show: the drag preview while dragging, else the real one. */
+  const shownLayout = $derived(previewLayout ?? layout);
+
   const groupDragHint = $derived.by(() => {
     if (!draggingGroupId) return null;
-    if (groupDragMode === "toggle") {
-      const dx = Math.abs(groupDragGhostX - groupDragStartX);
-      const dy = Math.abs(groupDragGhostY - groupDragStartY);
-      if (layout.xSpectrum && dx >= dy) {
-        const to = findNearestXStop(groupDragGhostX);
-        if (groupDragAnchorXStop && to) {
-          return `Shift-drag toggles X run: ${groupDragAnchorXStop} to ${to}`;
-        }
-      } else if (layout.ySpectrum) {
-        const to = findNearestYStop(groupDragGhostY);
-        if (groupDragAnchorYStop && to) {
-          return `Shift-drag toggles Y run: ${groupDragAnchorYStop} to ${to}`;
-        }
-      }
-      return "Shift-drag to span stops";
+    if (groupDragMode === "resize") {
+      return groupResizeTargetStop
+        ? `Resize to ${groupResizeTargetStop}`
+        : "Drag a knob to span stops";
+    }
+    if (groupDragMode === "proxy") {
+      const parts: string[] = [];
+      if (groupMoveTargetXStop) parts.push(`X: ${groupMoveTargetXStop}`);
+      if (groupMoveTargetYStop) parts.push(`Y: ${groupMoveTargetYStop}`);
+      return parts.length
+        ? `Place a copy at ${parts.join(" ")}`
+        : "Shift-drag to place a copy";
     }
     const xStop = findNearestXStop(groupDragGhostX);
     const yStop = findNearestYStop(groupDragGhostY);
@@ -669,24 +876,6 @@
       if (s) y = s.position;
     }
     return { x, y, xStop, yStop };
-  });
-
-  const dropTargetGroupId = $derived.by(() => {
-    if (!ui.isDraggingNode) return null;
-    const wx = ui.dragGhostX;
-    const wy = ui.dragGhostY;
-    for (const box of layout.groupBoxes) {
-      if (box.groupId === "__ungrouped") continue;
-      if (
-        wx >= box.x &&
-        wx <= box.x + box.width &&
-        wy >= box.y &&
-        wy <= box.y + box.height
-      ) {
-        return box.groupId;
-      }
-    }
-    return null;
   });
 </script>
 
@@ -736,93 +925,69 @@
       <SpectrumOverlay
         xSpectrum={layout.xSpectrum}
         ySpectrum={layout.ySpectrum}
+        dimmed={ui.isDraggingNode}
       />
 
-      {#if previewLayout}
-        {#each previewLayout.groupBoxes as box (box.groupId + ":" + box.x + ":" + box.y)}
-          <div
-            class="preview-group"
-            style:left="{box.x}px"
-            style:top="{box.y}px"
-            style:width="{box.width}px"
-            style:height="{box.height}px"
-            style:--group-color={box.color ? `var(${box.color})` : undefined}
-          >
-            <span class="preview-group-label">{box.name}</span>
-          </div>
-        {/each}
-      {:else}
-        {#each layout.groupBoxes as box (box.groupId + ":" + box.x + ":" + box.y)}
-          <NodeGroup
-            x={box.x}
-            y={box.y}
-            width={box.width}
-            height={box.height}
-            name={box.name}
-            color={box.color}
-            highlight={dropTargetGroupId === box.groupId}
-            selected={ui.isGroupSelected(box.groupId)}
-            draggable={hasSpectra && box.groupId !== "__ungrouped"}
-            beingDragged={draggingGroupId === box.groupId}
-            onSelect={(e) => handleGroupSelect(box.groupId, e)}
-            onRename={ui.activeDimensionId
-              ? (newName) => handleGroupRename(box.groupId, newName)
-              : undefined}
-            onDragStart={(e) => handleGroupPointerDown(box.groupId, e)}
-          />
-        {/each}
-      {/if}
+      {#each shownLayout.groupBoxes as box (box.groupId + ":" + box.xFrom + ":" + box.yFrom)}
+        <NodeGroup
+          x={box.x}
+          y={box.y}
+          width={box.width}
+          height={box.height}
+          name={box.name}
+          color={box.color}
+          preview={!!previewLayout}
+          emphasis={ui.isDraggingNode}
+          highlight={nodeDropGroupId === box.groupId}
+          selected={selectedBoxKey === boxKey(box)}
+          draggable={hasSpectra && box.groupId !== "__ungrouped"}
+          beingDragged={draggingGroupId === box.groupId}
+          resizableX={!previewLayout &&
+            hasSpectra &&
+            !!activeDim?.["x-spectrum"] &&
+            box.groupId !== "__ungrouped" &&
+            box.yFrom === box.yTo}
+          resizableY={!previewLayout &&
+            hasSpectra &&
+            !!activeDim?.["y-spectrum"] &&
+            box.groupId !== "__ungrouped" &&
+            box.xFrom === box.xTo}
+          onSelect={(e) => handleGroupSelect(box, e)}
+          onRename={ui.activeDimensionId
+            ? (newName) => handleGroupRename(box.groupId, newName)
+            : undefined}
+          onDragStart={(e) => handleGroupPointerDown(box, e)}
+          onColorClick={(e) => handleGroupColorClick(box, e)}
+          onResizeStart={(axis, edge, e) =>
+            handleGroupResizeStart(box, axis, edge, e)}
+        />
+      {/each}
 
-      <SVGLayer {project} {ui} layout={previewLayout ?? layout} />
+      <SVGLayer {project} {ui} layout={shownLayout} />
 
-      {#if previewLayout}
-        {#each Object.entries(previewLayout.nodes) as [noteId, pos] (noteId)}
-          <div
-            class="preview-node"
-            style:left="{pos.x}px"
-            style:top="{pos.y}px"
-            style:width="{pos.width}px"
-            style:min-height="{pos.height}px"
-          >
-            <span class="preview-node-title">{project.project.notes[noteId].title}</span>
-          </div>
-        {/each}
-      {:else}
-        {#each Object.entries(layout.nodes) as [noteId, pos] (noteId)}
-          <NodeCard
-            width={pos.width}
-            columnWidths={Object.entries(layout.nodes)
-              .filter(([id, node]) => id !== noteId && Math.abs(node.x - pos.x) < 1)
-              .map(([, node]) => node.width)}
-            height={pos.height}
-            x={pos.x}
-            y={pos.y}
-            {app}
-            {noteId}
-            title={project.project.notes[noteId].title}
-            short={project.project.notes[noteId].short}
-            long={project.project.notes[noteId].long}
-            tags={project.project.notes[noteId].tags ?? []}
-            suggestions={tagSuggestions}
-            {parentComponent}
-            {ui}
-            {project}
-            onMeasured={handleNodeMeasured}
-          />
-        {/each}
-      {/if}
-
-      {#if dragGhost}
-        <div
-          class="drag-ghost"
-          style:left="{dragGhost.x}px"
-          style:top="{dragGhost.y}px"
-          style:width="{dragGhost.width}px"
-          style:min-height="{dragGhost.height}px"
-        >
-          <h1>{dragGhost.title}</h1>
-        </div>
-      {/if}
+      {#each Object.entries(shownLayout.nodes) as [noteId, pos] (noteId)}
+        <NodeCard
+          width={pos.width}
+          columnWidths={Object.entries(shownLayout.nodes)
+            .filter(([id, node]) => id !== noteId && Math.abs(node.x - pos.x) < 1)
+            .map(([, node]) => node.width)}
+          height={pos.height}
+          x={pos.x}
+          y={pos.y}
+          preview={!!previewLayout}
+          {app}
+          {noteId}
+          title={project.project.notes[noteId].title}
+          short={project.project.notes[noteId].short}
+          long={project.project.notes[noteId].long}
+          tags={project.project.notes[noteId].tags ?? []}
+          suggestions={tagSuggestions}
+          {parentComponent}
+          {ui}
+          {project}
+          onMeasured={handleNodeMeasured}
+        />
+      {/each}
 
       {#if groupSnapTarget}
         <svg
@@ -860,6 +1025,24 @@
     existing={dialogExisting}
     onConfirm={handleDialogConfirm}
     onCancel={handleDialogCancel}
+  />
+{/if}
+
+{#if colorPopover}
+  <GroupColorPopover
+    x={colorPopover.x}
+    y={colorPopover.y}
+    current={colorPopover.current}
+    onPick={(color) => {
+      if (ui.activeDimensionId) {
+        project.setGroupColor(
+          ui.activeDimensionId,
+          colorPopover!.groupId,
+          color,
+        );
+      }
+    }}
+    onClose={() => (colorPopover = null)}
   />
 {/if}
 
@@ -907,64 +1090,6 @@
   .snap-hint {
     border-color: var(--interactive-accent);
     bottom: 40px;
-  }
-  .drag-ghost {
-    position: absolute;
-    padding: 8px 16px;
-    background-color: var(--background-primary);
-    border-radius: var(--radius-m);
-    border: 2px solid var(--interactive-accent);
-    box-shadow:
-      var(--shadow-stationary),
-      0 0 0 2px var(--interactive-accent);
-    opacity: 0.7;
-    pointer-events: none;
-    z-index: 100;
-  }
-  .preview-group {
-    position: absolute;
-    box-sizing: border-box;
-    border: 2px dashed var(--interactive-accent);
-    border-radius: var(--radius-m);
-    background: color-mix(
-      in srgb,
-      var(--group-color, var(--interactive-accent)) 12%,
-      transparent
-    );
-    pointer-events: none;
-    z-index: 90;
-  }
-  .preview-group-label {
-    display: block;
-    padding: 8px 12px;
-    font-size: 24px;
-    font-weight: 700;
-    color: var(--text-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .preview-node {
-    position: absolute;
-    box-sizing: border-box;
-    display: flex;
-    align-items: flex-start;
-    padding: 8px 16px;
-    background: color-mix(
-      in srgb,
-      var(--background-primary) 70%,
-      transparent
-    );
-    border: 2px dashed var(--interactive-accent);
-    border-radius: var(--radius-m);
-    opacity: 0.85;
-    pointer-events: none;
-    z-index: 91;
-  }
-  .preview-node-title {
-    font-size: 20px;
-    font-weight: 700;
-    color: var(--text-normal);
   }
 
   .snap-crosshair {

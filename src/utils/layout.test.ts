@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { Group, Note, ProjectData } from "../types";
+import type { Group, GroupCell, Note, ProjectData } from "../types";
 import { layoutEngine } from "./layout";
 
 // pretext measures text with a canvas context. Bun has no canvas, so use a
@@ -32,6 +32,8 @@ function makeNote(
     };
 }
 
+const cell = (x: string | null, y: string | null = null): GroupCell => ({ x, y });
+
 function makeProject(groups: Group[]): ProjectData {
     return {
         meta: { name: "T", created: "", modified: "" },
@@ -55,11 +57,11 @@ function makeProject(groups: Group[]): ProjectData {
     };
 }
 
-test("a contiguous X set makes one box across its stops", () => {
+test("a contiguous X run makes one box across its stops", () => {
     const layout = layoutEngine(
         makeProject([
-            { id: "span", name: "Span", x: ["a", "b", "c"], y: null },
-            { id: "point", name: "Point", x: "d", y: null },
+            { id: "span", name: "Span", cells: [cell("a"), cell("b"), cell("c")] },
+            { id: "point", name: "Point", cells: [cell("d")] },
         ]),
         "d",
     );
@@ -71,11 +73,11 @@ test("a contiguous X set makes one box across its stops", () => {
     expect(layout.nodes.n2.x).toBeLessThan(box.x + box.width);
 });
 
-test("a detached X set makes one box for each run", () => {
+test("a detached cell set makes one box for each run", () => {
     const layout = layoutEngine(
         makeProject([
-            { id: "span", name: "Span", x: ["a", "c"], y: null },
-            { id: "point", name: "Point", x: "d", y: null },
+            { id: "span", name: "Span", cells: [cell("a"), cell("c")] },
+            { id: "point", name: "Point", cells: [cell("d")] },
         ]),
         "d",
     );
@@ -89,8 +91,8 @@ test("a detached X set makes one box for each run", () => {
 test("two point groups in one cell stack", () => {
     const layout = layoutEngine(
         makeProject([
-            { id: "g1", name: "G1", x: "a", y: null },
-            { id: "g2", name: "G2", x: "a", y: null },
+            { id: "g1", name: "G1", cells: [cell("a")] },
+            { id: "g2", name: "G2", cells: [cell("a")] },
         ]),
         "d",
     );
@@ -100,8 +102,8 @@ test("two point groups in one cell stack", () => {
 test("a point group stacks below a span that shares its stop", () => {
     const layout = layoutEngine(
         makeProject([
-            { id: "span", name: "Span", x: ["a", "b"], y: null },
-            { id: "point", name: "Point", x: "b", y: null },
+            { id: "span", name: "Span", cells: [cell("a"), cell("b")] },
+            { id: "point", name: "Point", cells: [cell("b")] },
         ]),
         "d",
     );
@@ -115,8 +117,8 @@ test("a point group stacks below a span that shares its stop", () => {
 test("a single-row span keeps its own height in a tall row", () => {
     const layout = layoutEngine(
         makeProject([
-            { id: "span", name: "Span", x: ["a", "b"], y: null },
-            { id: "point", name: "Point", x: "d", y: null },
+            { id: "span", name: "Span", cells: [cell("a"), cell("b")] },
+            { id: "point", name: "Point", cells: [cell("d")] },
         ]),
         "d",
         { measuredHeights: { n3: 1000 } },
@@ -126,4 +128,24 @@ test("a single-row span keeps its own height in a tall row", () => {
     expect(spanBox).toBeDefined();
     expect(pointBox).toBeDefined();
     expect(spanBox!.height).toBeLessThan(pointBox!.height);
+});
+
+test("an explicit color wins and duplicate names differ", () => {
+    const layout = layoutEngine(
+        makeProject([
+            { id: "g1", name: "Twin", cells: [cell("a"), cell("b")] },
+            { id: "g2", name: "Twin", cells: [cell("c"), cell("d")] },
+            {
+                id: "solo",
+                name: "Solo",
+                cells: [cell("a"), cell("b")],
+                color: "red",
+            },
+        ]),
+        "d",
+    );
+    expect(layout.groups.g1.color).toBeDefined();
+    expect(layout.groups.g2.color).toBeDefined();
+    expect(layout.groups.g1.color).not.toBe(layout.groups.g2.color);
+    expect(layout.groups.solo.color).toBe("--color-red");
 });

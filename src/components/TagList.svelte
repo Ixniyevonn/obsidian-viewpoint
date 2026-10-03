@@ -11,6 +11,7 @@
     parentComponent: Component;
     onAdd: (tag: string) => void;
     onRemove: (index: number) => void;
+    onEditingChange?: (editing: boolean) => void;
   }
 
   const {
@@ -21,6 +22,7 @@
     parentComponent,
     onAdd,
     onRemove,
+    onEditingChange,
   }: Props = $props();
 
   const SUGGESTION_LIMIT = 8;
@@ -47,12 +49,14 @@
     isEditing = true;
     query = "";
     highlight = -1;
+    onEditingChange?.(true);
   }
 
   function close() {
     isEditing = false;
     query = "";
     highlight = -1;
+    onEditingChange?.(false);
   }
 
   function addTag(raw: string) {
@@ -273,7 +277,8 @@
     position: relative;
     align-self: center;
     width: 0;
-    height: 0;
+    height: calc(1.7em + 4px);
+    font-size: var(--font-ui-smaller);
   }
 
   .tag-add {
@@ -282,16 +287,18 @@
     top: 50%;
     transform: translateY(-50%);
     z-index: 1;
+    box-sizing: content-box;
+    height: 1.7em;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 18px;
-    height: 18px;
-    padding: 0;
+    padding: 1px 6px;
     border: 1px dashed var(--text-faint);
     border-radius: var(--radius-s);
     background: var(--background-primary);
     color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    line-height: 1.7;
     cursor: pointer;
     opacity: 0;
     pointer-events: none;

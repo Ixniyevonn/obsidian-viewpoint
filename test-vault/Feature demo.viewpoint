@@ -1,23 +1,20 @@
 meta:
   name: The Shattered Kingdoms
   created: '2025-01-15T10:30:00Z'
-  modified: '2026-09-14T20:00:00Z'
+  modified: '2026-10-03T22:24:37.654Z'
 dimensions:
   narrative:
     name: Narrative Role
     groups:
       - id: protagonists
         name: Protagonists
-        x: null
-        'y': null
+        cells: []
       - id: antagonists
         name: Antagonists
-        x: null
-        'y': null
+        cells: []
       - id: supporting
         name: Supporting Cast
-        x: null
-        'y': null
+        cells: []
   political:
     name: Political Alignment
     x-spectrum:
@@ -41,21 +38,27 @@ dimensions:
         - militant
     groups:
       - id: northern-rebels
-        name: Northern Rebellion
-        x: rebel
-        'y': militant
+        name: Northern Reen
+        cells:
+          - x: rebel
+            'y': militant
+          - x: rebel
+            'y': pragmatic
       - id: merchant-guild
         name: Merchant Guild
-        x: neutral
-        'y': diplomatic
+        cells:
+          - x: neutral
+            'y': diplomatic
       - id: royal-court
         name: Royal Court
-        x: crown
-        'y': pragmatic
+        cells:
+          - x: crown
+            'y': pragmatic
       - id: inquisition
         name: The Inquisition
-        x: loyalist
-        'y': militant
+        cells:
+          - x: loyalist
+            'y': militant
   magic:
     name: Magic System
     x-spectrum:
@@ -71,20 +74,24 @@ dimensions:
     groups:
       - id: innate-users
         name: Born Gifted
-        x: innate
-        'y': null
+        cells:
+          - x: innate
+            'y': null
       - id: scholars
         name: Arcane Scholars
-        x: learned
-        'y': null
+        cells:
+          - x: learned
+            'y': null
       - id: clerics
         name: Divine Servants
-        x: granted
-        'y': null
+        cells:
+          - x: granted
+            'y': null
       - id: artificers
         name: Artificers
-        x: artifact
-        'y': null
+        cells:
+          - x: artifact
+            'y': null
 notes:
   kira:
     title: Kira Thornwood
@@ -119,6 +126,10 @@ notes:
         - to: temple-amulet
           label: seeks
     width: 260
+    placement:
+      political:
+        x: rebel
+        'y': militant
   valdric:
     title: Lord Valdric
     short: Grand Inquisitor hunting magic users. See [[Demo Notes]].
@@ -135,7 +146,7 @@ notes:
     membership:
       narrative: antagonists
       political: inquisition
-      magic: null
+      magic: clerics
     connections:
       narrative:
         - to: marcus
@@ -187,6 +198,11 @@ notes:
       political:
         - to: valdric
           label: null
+    width: 418
+    placement:
+      political:
+        x: rebel
+        'y': pragmatic
   temple-amulet:
     title: The Ember Heart
     short: Ancient artifact that massively amplifies fire magic; sought by both factions.
@@ -216,6 +232,15 @@ notes:
       political: null
       magic: innate-users
     connections: {}
+  note-admbh3p5b4:
+    title: Untitled
+    short: ''
+    long: ''
+    membership:
+      political: merchant-guild
+    connections: {}
+    tags:
+      - '[[Demo Notes#Fire magic|Fire magic]]'
 node_order:
   narrative:protagonists:
     - kira

@@ -45,5 +45,35 @@ export function deserializeProject(raw: string): ProjectData {
         }
     }
 
+    // Migrate legacy group x/y placements to cells.
+    for (const dim of Object.values(data.dimensions)) {
+        const groups = dim.groups as unknown as Array<Record<string, unknown>>;
+        for (const group of groups) {
+            if (Array.isArray(group.cells)) continue;
+            const xs = toStopList(group.x);
+            const ys = toStopList(group.y);
+            const cells: Array<{ x: string | null; y: string | null }> = [];
+            if (xs.length > 0 && ys.length > 0) {
+                for (const x of xs) for (const y of ys) cells.push({ x, y });
+            } else if (xs.length > 0) {
+                for (const x of xs) cells.push({ x, y: null });
+            } else if (ys.length > 0) {
+                for (const y of ys) cells.push({ x: null, y });
+            }
+            group.cells = cells;
+            delete group.x;
+            delete group.y;
+        }
+    }
+
     return data;
+}
+
+/** Return the stop names of a legacy group axis value. */
+function toStopList(value: unknown): string[] {
+    if (typeof value === "string") return [value];
+    if (Array.isArray(value)) {
+        return value.filter((item): item is string => typeof item === "string");
+    }
+    return [];
 }

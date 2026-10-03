@@ -5,18 +5,22 @@ export interface Spectrum {
 }
 
 /**
- * The stops that a group uses on one spectrum axis.
+ * One cell where a group is present on the stop grid.
  *
- * A string gives one stop. A string array gives a set of stops. A group uses
- * at most one axis with more than one stop.
+ * A null axis means the axis has no spectrum or the group is not placed on it.
  */
-export type GroupStopSet = string | string[];
+export interface GroupCell {
+    x: string | null;
+    y: string | null;
+}
 
 export interface Group {
     id: string;
     name: string;
-    x: GroupStopSet | null;
-    y: GroupStopSet | null;
+    /** The cells where the group is present. An empty list means auto or unplaced. */
+    cells: GroupCell[];
+    /** Optional explicit color key, such as `red`. Omitted for the name color. */
+    color?: string;
 }
 
 /** The stops that a note uses inside its group, per spectrum axis. */

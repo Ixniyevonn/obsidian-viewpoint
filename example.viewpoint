@@ -8,16 +8,13 @@ dimensions:
     groups:
       - id: protagonists
         name: Protagonists
-        x: null
-        'y': null
+        cells: []
       - id: antagonists
         name: Antagonists
-        x: null
-        'y': null
+        cells: []
       - id: supporting
         name: Supporting Cast
-        x: null
-        'y': null
+        cells: []
   political:
     name: Political Alignment
     x-spectrum:
@@ -42,22 +39,26 @@ dimensions:
     groups:
       - id: northern-rebels
         name: Northern Rebellion
-        x:
-          - rebel
-          - neutral
-        'y': militant
+        cells:
+          - x: rebel
+            y: militant
+          - x: neutral
+            y: militant
       - id: merchant-guild
         name: Merchant Guild
-        x: neutral
-        'y': diplomatic
+        cells:
+          - x: neutral
+            y: diplomatic
       - id: royal-court
         name: Royal Court
-        x: crown
-        'y': pragmatic
+        cells:
+          - x: crown
+            y: pragmatic
       - id: inquisition
         name: The Inquisition
-        x: loyalist
-        'y': militant
+        cells:
+          - x: loyalist
+            y: militant
   magic:
     name: Magic System
     x-spectrum:
@@ -73,20 +74,24 @@ dimensions:
     groups:
       - id: innate-users
         name: Born Gifted
-        x: innate
-        'y': null
+        cells:
+          - x: innate
+            y: null
       - id: scholars
         name: Arcane Scholars
-        x: learned
-        'y': null
+        cells:
+          - x: learned
+            y: null
       - id: clerics
         name: Divine Servants
-        x: granted
-        'y': null
+        cells:
+          - x: granted
+            y: null
       - id: artificers
         name: Artificers
-        x: artifact
-        'y': null
+        cells:
+          - x: artifact
+            y: null
 notes:
   kira:
     title: Kira Thornwood

@@ -1,9 +1,11 @@
 import type { ProjectData, Spectrum } from "../types";
-import { groupColorVariable } from "./color";
+import { colorKeyToVariable, groupColorVariable } from "./color";
 import {
-    contiguousGroupRuns,
-    groupStopIndices,
-    type GroupStopRun,
+    cellsToIndices,
+    decomposeGroupRuns,
+    effectiveCellIndex,
+    type CellIndex,
+    type GroupRun,
 } from "./groupStops";
 import {
     DEFAULT_FONTS,
@@ -89,6 +91,14 @@ export interface GroupBoxLayout {
     height: number;
     name: string;
     color?: string;
+    /** First stop index of the box on the X axis. */
+    xFrom: number;
+    /** Last stop index of the box on the X axis. */
+    xTo: number;
+    /** First stop index of the box on the Y axis. */
+    yFrom: number;
+    /** Last stop index of the box on the Y axis. */
+    yTo: number;
 }
 
 export interface LayoutResult {
@@ -122,7 +132,7 @@ export interface LayoutOptions {
 
 const NODE_PAD_TOP = 8;
 const NODE_PAD_MID = 8;
-const NODE_PAD_BOTTOM = 16;
+const NODE_PAD_BOTTOM = 8;
 const NODE_MIN_H = 64;
 
 function estimateNodeHeight(
@@ -553,6 +563,10 @@ export function layoutEngine(
                 width: gw,
                 height: gh,
                 name: groupName,
+                xFrom: 0,
+                xTo: 0,
+                yFrom: 0,
+                yTo: 0,
             });
 
             cursorY += gh + groupGap;
@@ -609,59 +623,72 @@ function layoutWithSpectra(
         id: string;
         name: string;
         members: string[];
-        xIndices: number[];
-        yIndices: number[];
-        xRuns: GroupStopRun[];
-        yRuns: GroupStopRun[];
+        runs: GroupRun[];
         placed: boolean;
         complex: boolean;
         color?: string;
-        cells: Map<string, string[]>;
+        colorKey?: string;
+        membersByCell: Map<string, string[]>;
     }
 
-    // Resolve each group to stop runs and to per-cell member lists.
+    function indexCellKey(xi: number, yi: number): string {
+        return `${xi},${yi}`;
+    }
+
+    // Resolve each group to one-axis runs and to per-cell member lists.
     const resolved: ResolvedGroup[] = [];
     for (const g of dim.groups) {
         const members = buckets[g.id] || [];
-        const xIndices = xSpec ? groupStopIndices(g.x, xStops) : [0];
-        const yIndices = ySpec ? groupStopIndices(g.y, yStops) : [0];
-        const placed =
-            (xSpec ? xIndices.length > 0 : true) &&
-            (ySpec ? yIndices.length > 0 : true);
-        const complex = xIndices.length > 1 || yIndices.length > 1;
-        const cells = new Map<string, string[]>();
+        const indices = cellsToIndices(g.cells, xStops, yStops);
+        const placed = indices.length > 0;
+        const runs = placed ? decomposeGroupRuns(indices) : [];
+        const complex =
+            runs.length > 1 || runs.some((run) => run.cells.length > 1);
+        const membersByCell = new Map<string, string[]>();
         if (placed) {
             for (const noteId of members) {
                 const placement = project.notes[noteId]?.placement?.[dimId];
-                let xi = xIndices[0];
-                let yi = yIndices[0];
-                if (xSpec && xStops) {
-                    const idx = placement?.x ? xStops.indexOf(placement.x) : -1;
-                    xi = xIndices.includes(idx) ? idx : xIndices[0];
-                }
-                if (ySpec && yStops) {
-                    const idx = placement?.y ? yStops.indexOf(placement.y) : -1;
-                    yi = yIndices.includes(idx) ? idx : yIndices[0];
-                }
-                const key = `${xi},${yi}`;
-                const list = cells.get(key) ?? [];
+                const cell = effectiveCellIndex(
+                    placement,
+                    indices,
+                    xStops,
+                    yStops,
+                );
+                if (!cell) continue;
+                const key = indexCellKey(cell.xi, cell.yi);
+                const list = membersByCell.get(key) ?? [];
                 list.push(noteId);
-                cells.set(key, list);
+                membersByCell.set(key, list);
             }
         }
         resolved.push({
             id: g.id,
             name: g.name,
             members,
-            xIndices,
-            yIndices,
-            xRuns: contiguousGroupRuns(xIndices),
-            yRuns: contiguousGroupRuns(yIndices),
+            runs,
             placed,
             complex,
-            color: complex ? groupColorVariable(g.id) : undefined,
-            cells,
+            color: undefined,
+            colorKey: g.color,
+            membersByCell,
         });
+    }
+
+    // Color a complex group. An explicit color wins. Otherwise the name selects
+    // the color. A duplicate auto name in one dimension gets an index.
+    const groupNameUses = new Map<string, number>();
+    for (const group of resolved) {
+        if (!group.complex) continue;
+        if (group.colorKey) {
+            group.color = colorKeyToVariable(group.colorKey);
+            continue;
+        }
+        const key = group.name.trim().toLowerCase();
+        const use = (groupNameUses.get(key) ?? 0) + 1;
+        groupNameUses.set(key, use);
+        group.color = groupColorVariable(
+            use === 1 ? group.name : `${group.name} ${use}`,
+        );
     }
 
     if (ungrouped.length) {
@@ -669,24 +696,21 @@ function layoutWithSpectra(
             id: "__ungrouped",
             name: "Ungrouped",
             members: ungrouped,
-            xIndices: [],
-            yIndices: [],
-            xRuns: [],
-            yRuns: [],
+            runs: [],
             placed: false,
             complex: false,
-            cells: new Map(),
+            membersByCell: new Map(),
         });
     }
 
-    // Vertical packing. A single-row box stacks in its columns. A Y span
-    // claims its cells and stays exclusive.
+    // Vertical packing. A single-row box stacks in its columns. A multi-row
+    // box claims its cells and stays exclusive.
     const blockedCells = new Set<string>();
     const rowCursor = new Map<string, number>();
-    const singleOffset = new Map<string, number>();
+    const runOffset = new Map<string, number>();
 
     function cellMembers(group: ResolvedGroup, c: number, r: number): string[] {
-        return group.cells.get(`${c},${r}`) ?? [];
+        return group.membersByCell.get(indexCellKey(c, r)) ?? [];
     }
     function cellStackHeight(members: string[]): number {
         if (members.length === 0) return 0;
@@ -694,67 +718,67 @@ function layoutWithSpectra(
         for (const id of members) total += heightOf(id) + nodeGap;
         return total - nodeGap;
     }
-    function boxContentHeight(
-        group: ResolvedGroup,
-        xr: GroupStopRun,
-        row: number,
-    ): number {
+    function runKey(group: ResolvedGroup, run: GroupRun): string {
+        return `${group.id}:${run.xFrom},${run.yFrom}`;
+    }
+    function runContentHeight(group: ResolvedGroup, run: GroupRun): number {
         let top = 0;
-        for (let c = xr.from; c <= xr.to; c++) {
-            top = Math.max(top, cellStackHeight(cellMembers(group, c, row)));
+        for (const cell of run.cells) {
+            top = Math.max(
+                top,
+                cellStackHeight(cellMembers(group, cell.xi, cell.yi)),
+            );
         }
         return LABEL_H + groupPadding * 2 + top;
     }
 
     for (const group of resolved) {
         if (!group.placed) continue;
-        if (group.yIndices.length <= 1) {
-            const row = group.yIndices[0] ?? 0;
-            let conflict = false;
-            for (const xr of group.xRuns) {
-                for (let c = xr.from; c <= xr.to; c++) {
-                    if (blockedCells.has(`${row},${c}`)) conflict = true;
+        for (const run of group.runs) {
+            if (run.yFrom === run.yTo) {
+                let conflict = false;
+                for (const cell of run.cells) {
+                    if (blockedCells.has(indexCellKey(cell.yi, cell.xi))) {
+                        conflict = true;
+                    }
                 }
-            }
-            if (conflict) {
-                group.placed = false;
-                continue;
-            }
-            for (const xr of group.xRuns) {
-                const height = boxContentHeight(group, xr, row);
+                if (conflict) {
+                    group.placed = false;
+                    break;
+                }
                 let offset = 0;
-                for (let c = xr.from; c <= xr.to; c++) {
-                    offset = Math.max(offset, rowCursor.get(`${row},${c}`) ?? 0);
-                }
-                singleOffset.set(`${group.id}:${xr.from}`, offset);
-                const bottom = offset + height + groupGap;
-                for (let c = xr.from; c <= xr.to; c++) {
-                    rowCursor.set(
-                        `${row},${c}`,
-                        Math.max(rowCursor.get(`${row},${c}`) ?? 0, bottom),
+                for (const cell of run.cells) {
+                    offset = Math.max(
+                        offset,
+                        rowCursor.get(indexCellKey(cell.yi, cell.xi)) ?? 0,
                     );
                 }
-            }
-        } else {
-            const c = group.xIndices[0];
-            let conflict = false;
-            for (const yr of group.yRuns) {
-                for (let r = yr.from; r <= yr.to; r++) {
+                runOffset.set(runKey(group, run), offset);
+                const bottom = offset + runContentHeight(group, run) + groupGap;
+                for (const cell of run.cells) {
+                    const key = indexCellKey(cell.yi, cell.xi);
+                    rowCursor.set(
+                        key,
+                        Math.max(rowCursor.get(key) ?? 0, bottom),
+                    );
+                }
+            } else {
+                let conflict = false;
+                for (const cell of run.cells) {
+                    const key = indexCellKey(cell.yi, cell.xi);
                     if (
-                        blockedCells.has(`${r},${c}`) ||
-                        (rowCursor.get(`${r},${c}`) ?? 0) > 0
+                        blockedCells.has(key) ||
+                        (rowCursor.get(key) ?? 0) > 0
                     ) {
                         conflict = true;
                     }
                 }
-            }
-            if (conflict) {
-                group.placed = false;
-                continue;
-            }
-            for (const yr of group.yRuns) {
-                for (let r = yr.from; r <= yr.to; r++) {
-                    blockedCells.add(`${r},${c}`);
+                if (conflict) {
+                    group.placed = false;
+                    break;
+                }
+                for (const cell of run.cells) {
+                    blockedCells.add(indexCellKey(cell.yi, cell.xi));
                 }
             }
         }
@@ -767,7 +791,7 @@ function layoutWithSpectra(
         DEFAULT_NODE_WIDTH + groupPadding * 2,
     );
     for (const group of placedGroups) {
-        for (const [key, members] of group.cells) {
+        for (const [key, members] of group.membersByCell) {
             const c = Number(key.split(",")[0]);
             let width = DEFAULT_NODE_WIDTH;
             for (const id of members) width = Math.max(width, widthOf(id));
@@ -781,18 +805,20 @@ function layoutWithSpectra(
         rowH[r] = Math.max(rowH[r], bottom - groupGap);
     }
     for (const group of placedGroups) {
-        if (group.yIndices.length <= 1) continue;
-        const c = group.xIndices[0];
-        for (const yr of group.yRuns) {
-            for (let r = yr.from; r <= yr.to; r++) {
-                rowH[r] = Math.max(
-                    rowH[r],
-                    cellStackHeight(cellMembers(group, c, r)) + groupPadding * 2,
+        for (const run of group.runs) {
+            if (run.yFrom === run.yTo) continue;
+            for (const cell of run.cells) {
+                rowH[cell.yi] = Math.max(
+                    rowH[cell.yi],
+                    cellStackHeight(cellMembers(group, cell.xi, cell.yi)) +
+                        groupPadding * 2,
                 );
             }
-            const topStack = cellStackHeight(cellMembers(group, c, yr.from));
-            rowH[yr.from] = Math.max(
-                rowH[yr.from],
+            const topStack = cellStackHeight(
+                cellMembers(group, run.xFrom, run.yFrom),
+            );
+            rowH[run.yFrom] = Math.max(
+                rowH[run.yFrom],
                 LABEL_H + groupPadding + topStack + groupPadding,
             );
         }
@@ -825,53 +851,62 @@ function layoutWithSpectra(
     for (const group of placedGroups) {
         let primary: GroupBoxLayout | null = null;
 
-        if (group.yIndices.length <= 1) {
-            const row = group.yIndices[0] ?? 0;
-            for (const xr of group.xRuns) {
-                const offset = singleOffset.get(`${group.id}:${xr.from}`) ?? 0;
-                const height = boxContentHeight(group, xr, row);
+        for (const run of group.runs) {
+            if (run.yFrom === run.yTo) {
+                const offset = runOffset.get(runKey(group, run)) ?? 0;
                 const box: GroupBoxLayout = {
                     groupId: group.id,
                     name: group.name,
                     color: group.color,
-                    x: colX[xr.from],
-                    y: rowY[row] + offset,
-                    width: colX[xr.to] + colW[xr.to] - colX[xr.from],
-                    height,
+                    x: colX[run.xFrom],
+                    y: rowY[run.yFrom] + offset,
+                    width: colX[run.xTo] + colW[run.xTo] - colX[run.xFrom],
+                    height: runContentHeight(group, run),
+                    xFrom: run.xFrom,
+                    xTo: run.xTo,
+                    yFrom: run.yFrom,
+                    yTo: run.yTo,
                 };
                 result.groupBoxes.push(box);
                 if (!primary) primary = box;
-                for (let c = xr.from; c <= xr.to; c++) {
-                    const members = cellMembers(group, c, row);
+                for (const cell of run.cells) {
+                    const members = cellMembers(group, cell.xi, cell.yi);
                     if (members.length === 0) continue;
                     placeCellNodes(
                         members,
-                        colX[c] + groupPadding,
+                        colX[cell.xi] + groupPadding,
                         box.y + LABEL_H + groupPadding,
                     );
                 }
-            }
-        } else {
-            const c = group.xIndices[0];
-            for (const yr of group.yRuns) {
+            } else {
                 const box: GroupBoxLayout = {
                     groupId: group.id,
                     name: group.name,
                     color: group.color,
-                    x: colX[c],
-                    y: rowY[yr.from],
-                    width: colW[c],
-                    height: rowY[yr.to] + rowH[yr.to] - rowY[yr.from],
+                    x: colX[run.xFrom],
+                    y: rowY[run.yFrom],
+                    width: colW[run.xFrom],
+                    height: rowY[run.yTo] + rowH[run.yTo] - rowY[run.yFrom],
+                    xFrom: run.xFrom,
+                    xTo: run.xTo,
+                    yFrom: run.yFrom,
+                    yTo: run.yTo,
                 };
                 result.groupBoxes.push(box);
                 if (!primary) primary = box;
-                for (let r = yr.from; r <= yr.to; r++) {
-                    const members = cellMembers(group, c, r);
+                for (const cell of run.cells) {
+                    const members = cellMembers(group, cell.xi, cell.yi);
                     if (members.length === 0) continue;
                     const startY =
-                        rowY[r] +
-                        (r === yr.from ? LABEL_H + groupPadding : groupPadding);
-                    placeCellNodes(members, colX[c] + groupPadding, startY);
+                        rowY[cell.yi] +
+                        (cell.yi === run.yFrom
+                            ? LABEL_H + groupPadding
+                            : groupPadding);
+                    placeCellNodes(
+                        members,
+                        colX[cell.xi] + groupPadding,
+                        startY,
+                    );
                 }
             }
         }
@@ -920,6 +955,10 @@ function layoutWithSpectra(
             width: gw,
             height: gh,
             name: group.name,
+            xFrom: 0,
+            xTo: 0,
+            yFrom: 0,
+            yTo: 0,
         });
 
         unplacedX += gw + groupGap;

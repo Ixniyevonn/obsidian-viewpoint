@@ -8,13 +8,23 @@
         height: number;
         name: string;
         color?: string;
+        preview?: boolean;
+        emphasis?: boolean;
         highlight?: boolean;
         selected?: boolean;
         draggable?: boolean;
         beingDragged?: boolean;
+        resizableX?: boolean;
+        resizableY?: boolean;
         onRename?: (newName: string) => void;
         onSelect?: (e: MouseEvent) => void;
         onDragStart?: (e: PointerEvent) => void;
+        onColorClick?: (e: MouseEvent) => void;
+        onResizeStart?: (
+            axis: "x" | "y",
+            edge: "min" | "max",
+            e: PointerEvent,
+        ) => void;
     }
 
     const {
@@ -24,13 +34,19 @@
         height,
         name,
         color,
+        preview = false,
+        emphasis = false,
         highlight = false,
         selected = false,
         draggable = false,
         beingDragged = false,
+        resizableX = false,
+        resizableY = false,
         onRename,
         onSelect,
         onDragStart,
+        onColorClick,
+        onResizeStart,
     }: Props = $props();
 
     let isEditing = $state(false);
@@ -106,6 +122,17 @@
             cancel();
         }
     }
+
+    function handleHandle(
+        e: PointerEvent,
+        axis: "x" | "y",
+        edge: "min" | "max",
+    ) {
+        if (e.button !== 0 || !onResizeStart) return;
+        e.stopPropagation();
+        e.preventDefault();
+        onResizeStart(axis, edge, e);
+    }
 </script>
 
 <Node
@@ -113,11 +140,13 @@
     {height}
     {x}
     {y}
-    cssClass="node-group{highlight ? ' group-drop-target' : ''}{selected
+    cssClass="node-group{highlight ? ' group-drop-target' : ''}{emphasis
+        ? ' group-emphasis'
+        : ''}{selected
         ? ' group-selected'
         : ''}{draggable ? ' group-draggable' : ''}{beingDragged
         ? ' group-being-dragged'
-        : ''}{color ? ' group-complex' : ''}"
+        : ''}{color ? ' group-complex' : ''}{preview ? ' group-preview' : ''}"
     groupColor={color}
 >
     <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -150,10 +179,18 @@
                 onpointermove={handleBodyPointerMove}
             >
                 {#if color}
-                    <span
+                    <button
+                        type="button"
                         class="group-color-dot"
                         style:background-color={`var(${color})`}
-                    ></span>
+                        title="Change group color"
+                        aria-label="Change group color"
+                        onpointerdown={(e) => e.stopPropagation()}
+                        onclick={(e) => {
+                            e.stopPropagation();
+                            onColorClick?.(e);
+                        }}
+                    ></button>
                 {/if}
                 {name}
                 {#if draggable}
@@ -165,6 +202,31 @@
             </div>
         {/if}
     </div>
+
+    {#if resizableX && !preview}
+        <div
+            class="group-handle handle-x-min"
+            title="Drag to span stops"
+            onpointerdown={(e) => handleHandle(e, "x", "min")}
+        ></div>
+        <div
+            class="group-handle handle-x-max"
+            title="Drag to span stops"
+            onpointerdown={(e) => handleHandle(e, "x", "max")}
+        ></div>
+    {/if}
+    {#if resizableY && !preview}
+        <div
+            class="group-handle handle-y-min"
+            title="Drag to span stops"
+            onpointerdown={(e) => handleHandle(e, "y", "min")}
+        ></div>
+        <div
+            class="group-handle handle-y-max"
+            title="Drag to span stops"
+            onpointerdown={(e) => handleHandle(e, "y", "max")}
+        ></div>
+    {/if}
 </Node>
 
 <style>
@@ -191,6 +253,18 @@
             transparent
         );
         border-width: 2px;
+    }
+    :global(.node-group.group-emphasis) {
+        border-color: color-mix(
+            in srgb,
+            var(--group-color, var(--interactive-accent)) 65%,
+            var(--background-modifier-border)
+        );
+        background: color-mix(
+            in srgb,
+            var(--group-color, var(--interactive-accent)) 15%,
+            transparent
+        );
     }
     :global(.node-group.group-selected) {
         border-color: var(--interactive-accent);
@@ -289,8 +363,107 @@
         display: inline-block;
         width: 10px;
         height: 10px;
+        padding: 0;
+        border: none;
         border-radius: 50%;
         flex: 0 0 auto;
+        cursor: pointer;
+    }
+
+    :global(.node-group.group-preview) {
+        border-color: transparent;
+        outline: 2px dashed var(--interactive-accent);
+        outline-offset: -1px;
+        background: color-mix(
+            in srgb,
+            var(--group-color, var(--interactive-accent)) 14%,
+            transparent
+        );
+        pointer-events: none;
+    }
+    :global(.node-group.group-preview) .group-click-catcher,
+    :global(.node-group.group-preview) .group-label {
+        pointer-events: none;
+    }
+
+    .group-handle {
+        position: absolute;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: color-mix(
+            in srgb,
+            var(--group-color, var(--background-modifier-border)) 14%,
+            var(--background-secondary)
+        );
+        border: 1px solid
+            color-mix(
+                in srgb,
+                var(--group-color, var(--background-modifier-border)) 45%,
+                var(--background-modifier-border)
+            );
+        border-radius: 999px;
+        color: var(--text-faint);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 100ms ease;
+        z-index: 220;
+        transform: scale(calc(1 / var(--zoom, 1)));
+    }
+    .group-handle::before {
+        content: "";
+        width: 3px;
+        height: 11px;
+        background-image: radial-gradient(
+            circle,
+            currentColor 1.2px,
+            transparent 1.4px
+        );
+        background-size: 3px 4px;
+        background-repeat: repeat-y;
+    }
+    :global(.node-group:hover) .group-handle {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .group-handle:hover {
+        color: var(--text-muted);
+    }
+    .group-handle.handle-x-min,
+    .group-handle.handle-x-max {
+        width: 12px;
+        height: 34px;
+        top: 50%;
+        margin-top: -17px;
+        cursor: ew-resize;
+    }
+    .group-handle.handle-x-min {
+        left: -6px;
+    }
+    .group-handle.handle-x-max {
+        right: -6px;
+    }
+    .group-handle.handle-y-min,
+    .group-handle.handle-y-max {
+        width: 34px;
+        height: 12px;
+        left: 50%;
+        margin-left: -17px;
+        cursor: ns-resize;
+    }
+    .group-handle.handle-y-min::before,
+    .group-handle.handle-y-max::before {
+        width: 11px;
+        height: 3px;
+        background-size: 4px 3px;
+        background-repeat: repeat-x;
+    }
+    .group-handle.handle-y-min {
+        top: -6px;
+    }
+    .group-handle.handle-y-max {
+        bottom: -6px;
     }
 
     :global(.node-group.group-draggable) .group-label {

@@ -1,12 +1,13 @@
 <script lang="ts">
-  import { snapNodeWidth } from "../utils/nodeWidth";
   import type { App, Component } from "obsidian";
+  import { setIcon } from "obsidian";
   import {
     MAX_NODE_WIDTH,
     MIN_NODE_WIDTH,
     type ProjectStore,
   } from "../stores/project.svelte";
   import type { UiStore } from "../stores/ui.svelte";
+  import { snapNodeWidth } from "../utils/nodeWidth";
   import MarkdownContent from "./MarkdownContent.svelte";
   import Node from "./Node.svelte";
   import TagList from "./TagList.svelte";
@@ -27,6 +28,7 @@
     parentComponent: Component;
     ui: UiStore;
     project: ProjectStore;
+    preview?: boolean;
     onMeasured?: (id: string, height: number) => void;
   }
 
@@ -46,6 +48,7 @@
     parentComponent,
     ui,
     project,
+    preview = false,
     onMeasured,
   }: Props = $props();
 
@@ -58,6 +61,10 @@
   const isRetargeting = $derived(ui.isRetargeting);
   const isRetargetAnchor = $derived(ui.retargetAnchorId === noteId);
   const isEditingShort = $derived(ui.editingShortId === noteId);
+  let hovered = $state(false);
+  let tagEditing = $state(false);
+  let tagTransitioning = $state(false);
+  const tagExpanded = $derived(tags.length > 0 || hovered || tagEditing);
   const isBeingDragged = $derived(ui.draggingNodeId === noteId);
 
   let shortInputEl: HTMLTextAreaElement | undefined = $state();
@@ -85,7 +92,11 @@
   $effect(() => {
     if (!cardEl || !onMeasured) return;
     const element = cardEl;
-    const report = () => onMeasured(noteId, element.offsetHeight + 4);
+    const report = () => {
+      // Hover growth must not change the layout. Only measure the base card.
+      if ((hovered || tagTransitioning) && !isEditingShort) return;
+      onMeasured(noteId, element.offsetHeight + 4);
+    };
     const observer = new ResizeObserver(report);
     observer.observe(element);
     return () => observer.disconnect();
@@ -208,25 +219,33 @@
     }
 
     e.stopPropagation();
-    ui.clearPendingDelete();
-
-    if (e.shiftKey) {
-      ui.selectNode(noteId, true);
-      return;
-    }
-
-    ui.selectNode(noteId, false);
   }
 
   function handleShortClick(e: MouseEvent) {
     if (e.button !== 0 || isConnectingMode || isRetargeting) return;
     e.stopPropagation();
-    if (!e.shiftKey) {
-      ui.selectNode(noteId, false);
-    }
+  }
+
+  function handleShortDblClick(e: MouseEvent) {
+    if (e.button !== 0 || isConnectingMode || isRetargeting) return;
+    e.stopPropagation();
+    startShortEdit();
+  }
+
+  function startShortEdit() {
     captureShortStyle();
     editValue = short;
     ui.editingShortId = noteId;
+  }
+
+  /** Draw an Obsidian icon inside an element. */
+  function iconAction(node: HTMLElement, icon: string) {
+    setIcon(node, icon);
+    return {
+      update(next: string) {
+        setIcon(node, next);
+      },
+    };
   }
 
   function handleDblClick(e: MouseEvent) {
@@ -270,7 +289,8 @@
     if (
       e.target instanceof HTMLInputElement ||
       e.target instanceof HTMLTextAreaElement
-    ) return;
+    )
+      return;
     e.preventDefault();
     ui.startConnection(noteId);
   }
@@ -291,8 +311,14 @@
       e.preventDefault();
       return;
     }
+    if (e.button !== 0) return;
+
+    if (!isConnectingMode && !isRetargeting) {
+      ui.clearPendingDelete();
+      ui.selectNode(noteId, e.shiftKey || e.ctrlKey || e.metaKey);
+    }
+
     if (
-      e.button === 0 &&
       !isConnectingMode &&
       !isRetargeting &&
       !isEditingShort &&
@@ -375,7 +401,10 @@
       MIN_NODE_WIDTH,
       Math.min(MAX_NODE_WIDTH, resizeStartWidth + dx),
     );
-    project.updateNoteWidth(noteId, snapNodeWidth(newWidth, columnWidths, zoom));
+    project.updateNoteWidth(
+      noteId,
+      snapNodeWidth(newWidth, columnWidths, zoom),
+    );
   }
 
   function onResizeUp(_e: PointerEvent) {
@@ -397,14 +426,19 @@
     ? ' connect-target'
     : ''}{isRetargeting && !isRetargetAnchor
     ? ' connect-target'
-    : ''}{isRetargetAnchor ? ' connecting-source' : ''}{isBeingDragged
+    : ''}{isRetargetAnchor ? ' connecting-source' : ''}{isBeingDragged &&
+  !preview
     ? ' dragging'
+    : ''}{preview ? ' preview' : ''}{preview && isBeingDragged
+    ? ' preview-active'
     : ''}"
   onclick={handleClick}
   ondblclick={handleDblClick}
   oncontextmenu={handleContextMenu}
   onauxclick={handleAuxClick}
   onpointerdown={handlePointerDown}
+  onpointerenter={() => (hovered = true)}
+  onpointerleave={() => (hovered = false)}
 >
   <div class="node-card-inner" bind:this={cardEl}>
     <div class="node-title" bind:this={titleWrapperEl}>
@@ -420,56 +454,97 @@
         />
       {:else}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <h2 ondblclick={handleTitleDblClick}>{title}</h2>
-      {/if}
-    </div>
-
-    <div class="node-body">
-      {#if isEditingShort}
-        <textarea
-          bind:this={shortInputEl}
-          bind:value={editValue}
-          class="short-edit"
-          rows="1"
-          style={shortEditStyle}
-          onkeydown={handleShortKeydown}
-          onblur={handleShortBlur}
-          oninput={autoResizeShort}
-          onclick={(e) => e.stopPropagation()}
-          ondblclick={(e) => e.stopPropagation()}
-        ></textarea>
-      {:else}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-          class="short-text"
-          onclick={handleShortClick}
-          ondblclick={(e) => e.stopPropagation()}
-        >
-          {#if short}
-            <MarkdownContent {app} markdown={short} sourcePath={project.sourcePath} {parentComponent} />
-          {:else}
-            <span class="short-placeholder">Click to add description…</span>
-          {/if}
-        </div>
+        <h2 onclick={handleClick} ondblclick={handleTitleDblClick}>{title}</h2>
+        {#if !short && !preview}
+          <button
+            type="button"
+            class="title-description-add"
+            title="Add description"
+            aria-label="Add description"
+            onpointerdown={(e) => e.stopPropagation()}
+            onclick={(e) => {
+              e.stopPropagation();
+              startShortEdit();
+            }}
+          >
+            <span use:iconAction={"pencil"}></span>
+          </button>
+        {/if}
       {/if}
     </div>
 
-    <TagList
-      {tags}
-      {suggestions}
-      {app}
-      sourcePath={project.sourcePath}
-      {parentComponent}
-      onAdd={(tag) => project.addNoteTag(noteId, tag)}
-      onRemove={(index) => project.removeNoteTag(noteId, index)}
-    />
+    {#if short || isEditingShort}
+      <div class="node-body">
+        {#if isEditingShort}
+          <textarea
+            bind:this={shortInputEl}
+            bind:value={editValue}
+            class="short-edit"
+            rows="1"
+            style={shortEditStyle}
+            onkeydown={handleShortKeydown}
+            onblur={handleShortBlur}
+            oninput={autoResizeShort}
+            onclick={(e) => e.stopPropagation()}
+            ondblclick={(e) => e.stopPropagation()}
+          ></textarea>
+        {:else}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="short-text"
+            onclick={handleShortClick}
+            ondblclick={handleShortDblClick}
+          >
+            <MarkdownContent
+              {app}
+              markdown={short}
+              sourcePath={project.sourcePath}
+              {parentComponent}
+            />
+          </div>
+        {/if}
+      </div>
+    {/if}
+
+    <div
+      class="tag-row"
+      class:expanded={tagExpanded}
+      class:revealed={tagExpanded && !tagTransitioning}
+      class:editing={tagEditing}
+      ontransitionstart={(e) => {
+        if (e.target === e.currentTarget) tagTransitioning = true;
+      }}
+      ontransitionend={(e) => {
+        if (e.target === e.currentTarget) tagTransitioning = false;
+      }}
+    >
+      <div class="tag-row-inner">
+        <TagList
+          {tags}
+          {suggestions}
+          {app}
+          sourcePath={project.sourcePath}
+          {parentComponent}
+          onAdd={(tag) => project.addNoteTag(noteId, tag)}
+          onRemove={(index) => project.removeNoteTag(noteId, index)}
+          onEditingChange={(value) => (tagEditing = value)}
+        />
+      </div>
+    </div>
   </div>
 
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="resize-handle" title="Drag to resize; double-click for automatic width"
+  <div
+    class="resize-handle"
+    title="Drag to resize; double-click for automatic width"
     onpointerdown={handleResizePointerDown}
-    ondblclick={(e) => { e.stopPropagation(); project.updateNoteWidth(noteId, undefined); }}></div>
+    ondblclick={(e) => {
+      e.stopPropagation();
+      project.updateNoteWidth(noteId, undefined);
+    }}
+  ></div>
 </Node>
 
 <style>
@@ -486,20 +561,68 @@
       box-shadow 120ms ease;
   }
 
+  :global(.node-card.preview) {
+    border-color: transparent;
+    outline: 2px dashed var(--interactive-accent);
+    outline-offset: -2px;
+    opacity: 0.35;
+    pointer-events: none;
+  }
+
+  :global(.node-card.preview.preview-active) {
+    outline-style: solid;
+    opacity: 1;
+  }
+
   .node-card-inner {
-    padding: 8px 16px 12px;
+    padding: 8px 16px 8px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
     overflow-wrap: anywhere;
+  }
+
+  .node-body {
+    margin-top: 8px;
+  }
+
+  .tag-row {
+    display: grid;
+    grid-template-rows: 0fr;
+    margin-top: 0;
+    transition:
+      grid-template-rows 150ms ease,
+      margin-top 150ms ease;
+  }
+
+  .tag-row.expanded {
+    grid-template-rows: 1fr;
+    margin-top: 8px;
+  }
+
+  .tag-row-inner {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .tag-row.revealed .tag-row-inner,
+  .tag-row.editing .tag-row-inner {
+    overflow: visible;
   }
 
   :global(.node-card:hover) {
     border-color: var(--text-faint);
+    z-index: 5;
   }
 
   :global(.node-card.selected) {
     border-color: var(--interactive-accent);
+    background-color: color-mix(
+      in srgb,
+      var(--interactive-accent) 10%,
+      var(--background-primary)
+    );
+    outline: 2px solid var(--interactive-accent);
+    outline-offset: 1px;
     box-shadow:
       var(--shadow-stationary),
       0 0 0 2px var(--interactive-accent);
@@ -545,9 +668,49 @@
     pointer-events: none;
   }
 
+  .node-title {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
   .node-title h2 {
+    flex: 1;
+    min-width: 0;
     margin: 0;
     padding: 0;
+  }
+
+  .title-description-add {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    border: none;
+    background: transparent;
+    color: var(--text-faint);
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 100ms ease;
+    box-shadow: none;
+  }
+
+  .title-description-add :global(svg) {
+    width: 14px;
+    height: 14px;
+  }
+
+  :global(.node-card:hover) .title-description-add,
+  .title-description-add:focus-visible {
+    opacity: 0.7;
+    pointer-events: auto;
+  }
+
+  .title-description-add:hover {
+    color: var(--text-normal);
+    opacity: 1;
   }
 
   .title-edit {
@@ -575,7 +738,7 @@
   }
 
   .short-text {
-    cursor: text;
+    cursor: default;
     min-height: 1.2em;
   }
 
@@ -587,12 +750,6 @@
   .short-text :global(.markdown-rendered > :last-child),
   .short-text :global(.markdown-rendered > div > :last-child) {
     margin-bottom: 0;
-  }
-
-  .short-placeholder {
-    color: var(--text-faint);
-    font-style: italic;
-    font-size: var(--font-ui-small);
   }
 
   .short-edit {

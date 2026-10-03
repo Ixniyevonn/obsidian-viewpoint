@@ -10,6 +10,28 @@ const COLOR_VARIABLES = [
     "--color-pink",
 ];
 
+/** The color keys that a group or tag can use. */
+export const GROUP_COLOR_KEYS = [
+    "red",
+    "orange",
+    "yellow",
+    "green",
+    "cyan",
+    "blue",
+    "purple",
+    "pink",
+];
+
+/**
+ * Return the CSS color variable for a color key.
+ *
+ * @param key - A color key, such as `red`.
+ * @returns The CSS variable name, such as `--color-red`.
+ */
+export function colorKeyToVariable(key: string): string {
+    return `--color-${key}`;
+}
+
 /**
  * Return a stable color variable for a seed string.
  *
@@ -32,12 +54,13 @@ export function hashColorVariable(seed: string): string {
 /**
  * Return the color variable for a group.
  *
- * The function hashes the group ID, not the group name. Two groups with the
- * same name thus get different colors.
+ * The function hashes the color seed, which is based on the group name. The
+ * same name gives the same color. The caller appends an index for a duplicate
+ * name, so different groups still differ.
  *
- * @param groupId - The stable group ID.
+ * @param seed - The group name, or a name with a duplicate index.
  * @returns A CSS color variable name.
  */
-export function groupColorVariable(groupId: string): string {
-    return hashColorVariable(groupId);
+export function groupColorVariable(seed: string): string {
+    return hashColorVariable(seed);
 }

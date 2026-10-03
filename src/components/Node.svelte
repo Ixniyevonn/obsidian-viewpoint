@@ -14,6 +14,8 @@
     oncontextmenu?: (e: MouseEvent) => void;
     onauxclick?: (e: MouseEvent) => void;
     onpointerdown?: (e: PointerEvent) => void;
+    onpointerenter?: (e: PointerEvent) => void;
+    onpointerleave?: (e: PointerEvent) => void;
   }
 
   const {
@@ -29,6 +31,8 @@
     oncontextmenu,
     onauxclick,
     onpointerdown,
+    onpointerenter,
+    onpointerleave,
   }: Props = $props();
 </script>
 
@@ -39,12 +43,14 @@
   style:left={`${x}px`}
   style:top={`${y}px`}
   style:--group-color={groupColor ? `var(${groupColor})` : undefined}
-  use:flip={{ x, y }}
+  use:flip={{ x, y, width, minHeight: height }}
   {onclick}
   {ondblclick}
   {oncontextmenu}
   {onauxclick}
   {onpointerdown}
+  {onpointerenter}
+  {onpointerleave}
 >
   {@render children?.()}
 </div>

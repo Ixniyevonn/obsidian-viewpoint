@@ -1,364 +1,273 @@
-import type { Group, GroupStopSet, Note, ProjectData } from "../types";
+import type { GroupCell, Note, ProjectData } from "../types";
 
-/** A contiguous run of stop indices, inclusive. */
-export interface GroupStopRun {
-    from: number;
-    to: number;
+/** One stop index pair. A null axis of a cell becomes index 0. */
+export interface CellIndex {
+    xi: number;
+    yi: number;
+}
+
+/** A box of a group: a cell run along one axis. */
+export interface GroupRun {
+    xFrom: number;
+    xTo: number;
+    yFrom: number;
+    yTo: number;
+    cells: CellIndex[];
+}
+
+/** Return a stable key for a cell. */
+export function cellKey(cell: GroupCell): string {
+    return `${cell.x ?? "\u0001"}\u0000${cell.y ?? "\u0001"}`;
+}
+
+/** Return a stable key for an index cell. */
+export function indexKey(cell: CellIndex): string {
+    return `${cell.xi},${cell.yi}`;
+}
+
+/** Return true when a run contains an index cell. */
+export function runContains(run: GroupRun, xi: number, yi: number): boolean {
+    return run.cells.some((cell) => cell.xi === xi && cell.yi === yi);
 }
 
 /**
- * Return the sorted stop indices for a group axis value.
+ * Clean one group cell against the spectra.
  *
- * The function reads a stop name or a stop list. It keeps known stops only,
- * removes duplicates, and sorts the result by spectrum order.
- *
- * @param value - The group axis value.
- * @param stops - The stop names of the spectrum, or null when the axis has no spectrum.
- * @returns The sorted stop indices. The result is empty when the axis has no spectrum.
+ * @param cell - The raw cell.
+ * @param xStops - The X stop names, or null.
+ * @param yStops - The Y stop names, or null.
+ * @returns The clean cell, or null when the cell is not valid.
  */
-export function groupStopIndices(
-    value: GroupStopSet | null | undefined,
-    stops: string[] | null | undefined,
-): number[] {
-    if (!value || !stops || stops.length === 0) return [];
-    const names = typeof value === "string" ? [value] : value;
-    const index = new Map<string, number>();
-    stops.forEach((name, i) => {
-        index.set(name, i);
-    });
-    const result = new Set<number>();
-    for (const name of names) {
-        const i = index.get(name);
-        if (i !== undefined) result.add(i);
+export function normalizeGroupCell(
+    cell: GroupCell,
+    xStops: string[] | null | undefined,
+    yStops: string[] | null | undefined,
+): GroupCell | null {
+    if (!xStops && !yStops) return null;
+    let x = cell.x ?? null;
+    let y = cell.y ?? null;
+    if (xStops) {
+        if (x === null || !xStops.includes(x)) return null;
+    } else {
+        x = null;
     }
-    return [...result].sort((a, b) => a - b);
-}
-
-/**
- * Build a group axis value from stop indices.
- *
- * The function keeps indices in range, removes duplicates, and sorts them. One
- * index gives a stop name. Two or more indices give a stop list.
- *
- * @param indices - The stop indices.
- * @param stops - The stop names of the spectrum.
- * @returns The axis value, or null when no index is valid.
- */
-export function groupStopSetFromIndices(
-    indices: number[],
-    stops: string[] | null | undefined,
-): GroupStopSet | null {
-    if (!stops || stops.length === 0) return null;
-    const sorted = [...new Set(indices)]
-        .filter((i) => i >= 0 && i < stops.length)
-        .sort((a, b) => a - b);
-    if (sorted.length === 0) return null;
-    if (sorted.length === 1) return stops[sorted[0]];
-    return sorted.map((i) => stops[i]);
-}
-
-/**
- * Return a clean axis value for a spectrum.
- *
- * The function removes unknown stops, duplicates, and order differences. It
- * returns null when the axis has no spectrum or no known stop.
- *
- * @param value - The raw axis value.
- * @param stops - The stop names of the spectrum.
- * @returns The clean axis value, or null.
- */
-export function normalizeGroupStopSet(
-    value: GroupStopSet | null | undefined,
-    stops: string[] | null | undefined,
-): GroupStopSet | null {
-    if (!stops || stops.length === 0) return null;
-    return groupStopSetFromIndices(groupStopIndices(value, stops), stops);
-}
-
-/**
- * Return the number of stops in an axis value.
- *
- * @param value - The axis value.
- * @param stops - The stop names of the spectrum.
- * @returns The count of known stops.
- */
-export function groupStopCount(
-    value: GroupStopSet | null | undefined,
-    stops: string[] | null | undefined,
-): number {
-    return groupStopIndices(value, stops).length;
-}
-
-/**
- * Split sorted stop indices into contiguous runs.
- *
- * @param indices - The sorted stop indices.
- * @returns The contiguous runs, inclusive.
- */
-export function contiguousGroupRuns(indices: number[]): GroupStopRun[] {
-    const runs: GroupStopRun[] = [];
-    for (const i of indices) {
-        const last = runs[runs.length - 1];
-        if (last && i === last.to + 1) last.to = i;
-        else runs.push({ from: i, to: i });
+    if (yStops) {
+        if (y === null || !yStops.includes(y)) return null;
+    } else {
+        y = null;
     }
+    return { x, y };
+}
+
+/**
+ * Clean a group cell list.
+ *
+ * @param cells - The raw cells.
+ * @param xStops - The X stop names, or null.
+ * @param yStops - The Y stop names, or null.
+ * @returns The clean cells, with invalid cells and duplicates removed.
+ */
+export function normalizeGroupCells(
+    cells: GroupCell[] | null | undefined,
+    xStops: string[] | null | undefined,
+    yStops: string[] | null | undefined,
+): GroupCell[] {
+    if (!Array.isArray(cells)) return [];
+    const seen = new Set<string>();
+    const result: GroupCell[] = [];
+    for (const cell of cells) {
+        const clean = normalizeGroupCell(cell, xStops, yStops);
+        if (!clean) continue;
+        const key = cellKey(clean);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        result.push(clean);
+    }
+    return result;
+}
+
+/** Convert cells to stop indices. */
+export function cellsToIndices(
+    cells: GroupCell[],
+    xStops: string[] | null | undefined,
+    yStops: string[] | null | undefined,
+): CellIndex[] {
+    const result: CellIndex[] = [];
+    for (const cell of cells) {
+        const xi = xStops ? xStops.indexOf(cell.x ?? "") : 0;
+        const yi = yStops ? yStops.indexOf(cell.y ?? "") : 0;
+        if (xStops && xi < 0) continue;
+        if (yStops && yi < 0) continue;
+        result.push({ xi, yi });
+    }
+    return dedupeIndices(result);
+}
+
+/** Convert stop indices to cells. */
+export function indicesToCells(
+    indices: CellIndex[],
+    xStops: string[] | null | undefined,
+    yStops: string[] | null | undefined,
+): GroupCell[] {
+    const cells: GroupCell[] = [];
+    for (const cell of dedupeIndices(indices)) {
+        cells.push({
+            x: xStops ? (xStops[cell.xi] ?? null) : null,
+            y: yStops ? (yStops[cell.yi] ?? null) : null,
+        });
+    }
+    return cells;
+}
+
+/** Remove duplicate index cells. */
+export function dedupeIndices(indices: CellIndex[]): CellIndex[] {
+    const seen = new Set<string>();
+    const result: CellIndex[] = [];
+    for (const cell of indices) {
+        const key = indexKey(cell);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        result.push(cell);
+    }
+    return result;
+}
+
+/**
+ * Split index cells into one-axis runs.
+ *
+ * The function walks the cells in row-major order. A cell with a horizontal
+ * neighbor starts a horizontal run. A cell without one starts a vertical run.
+ *
+ * @param indices - The index cells.
+ * @returns The runs. Each cell belongs to exactly one run.
+ */
+export function decomposeGroupRuns(indices: CellIndex[]): GroupRun[] {
+    const cells = dedupeIndices(indices);
+    const present = new Set(cells.map(indexKey));
+    const visited = new Set<string>();
+    const has = (xi: number, yi: number) => present.has(`${xi},${yi}`);
+    const free = (xi: number, yi: number) =>
+        has(xi, yi) && !visited.has(`${xi},${yi}`);
+    const sorted = [...cells].sort((a, b) => a.yi - b.yi || a.xi - b.xi);
+    const runs: GroupRun[] = [];
+
+    for (const start of sorted) {
+        if (visited.has(indexKey(start))) continue;
+
+        let xTo = start.xi;
+        while (free(xTo + 1, start.yi)) xTo++;
+        let xFrom = start.xi;
+        while (free(xFrom - 1, start.yi)) xFrom--;
+
+        if (xTo > xFrom) {
+            const runCells: CellIndex[] = [];
+            for (let x = xFrom; x <= xTo; x++) {
+                runCells.push({ xi: x, yi: start.yi });
+                visited.add(`${x},${start.yi}`);
+            }
+            runs.push({
+                xFrom,
+                xTo,
+                yFrom: start.yi,
+                yTo: start.yi,
+                cells: runCells,
+            });
+            continue;
+        }
+
+        let yTo = start.yi;
+        while (free(start.xi, yTo + 1)) yTo++;
+        let yFrom = start.yi;
+        while (free(start.xi, yFrom - 1)) yFrom--;
+        const runCells: CellIndex[] = [];
+        for (let y = yFrom; y <= yTo; y++) {
+            runCells.push({ xi: start.xi, yi: y });
+            visited.add(`${start.xi},${y}`);
+        }
+        runs.push({ xFrom: start.xi, xTo: start.xi, yFrom, yTo, cells: runCells });
+    }
+
     return runs;
 }
 
-/**
- * Return the allowed index nearest to a target index.
- *
- * @param index - The target index.
- * @param allowed - The allowed indices, sorted.
- * @returns The nearest allowed index, or -1 when none is allowed. A tie goes to the earlier index.
- */
-export function nearestStopIndex(index: number, allowed: number[]): number {
-    if (allowed.length === 0) return -1;
-    let best = allowed[0];
-    let bestDist = Math.abs(allowed[0] - index);
-    for (const a of allowed) {
-        const d = Math.abs(a - index);
-        if (d < bestDist) {
-            best = a;
-            bestDist = d;
-        }
-    }
-    return best;
-}
-
-/**
- * Toggle a contiguous run of stops in an axis value.
- *
- * The function adds the run when it is not fully present. It removes the run
- * when it is fully present. Adjacent runs merge on their own. A toggle keeps at
- * least one stop, so a group never loses its position. When a removal would
- * empty the set, the function keeps the end stop of the run.
- *
- * @param value - The current axis value.
- * @param stops - The stop names of the spectrum.
- * @param fromIndex - One end index of the run.
- * @param toIndex - The other end index of the run.
- * @returns The new axis value.
- */
-export function toggleGroupStopRun(
-    value: GroupStopSet | null | undefined,
-    stops: string[] | null | undefined,
-    fromIndex: number,
-    toIndex: number,
-): GroupStopSet | null {
-    if (!stops) return null;
-    const current = groupStopIndices(value, stops);
-    const low = Math.min(fromIndex, toIndex);
-    const high = Math.max(fromIndex, toIndex);
-    const run: number[] = [];
-    for (let i = low; i <= high; i++) run.push(i);
-    const fullyPresent = run.every((i) => current.includes(i));
-    const next = fullyPresent
-        ? current.filter((i) => i < low || i > high)
-        : [...new Set([...current, ...run])];
-    // Keep one stop. A group must not lose its position from a toggle.
-    if (next.length === 0) {
-        return groupStopSetFromIndices([toIndex], stops);
-    }
-    return groupStopSetFromIndices(next, stops);
-}
-
-/**
- * Move a stop set by the distance between two stops.
- *
- * The function keeps the span length. It clamps the move at the spectrum ends.
- *
- * @param value - The current axis value.
- * @param stops - The stop names of the spectrum.
- * @param fromStop - The stop where the move starts.
- * @param toStop - The stop where the move ends.
- * @returns The moved axis value.
- */
-export function shiftGroupStopSet(
-    value: GroupStopSet | null | undefined,
-    stops: string[] | null | undefined,
-    fromStop: string,
-    toStop: string,
-): GroupStopSet | null {
-    if (!stops) return null;
-    const indices = groupStopIndices(value, stops);
-    const fromIndex = stops.indexOf(fromStop);
-    const toIndex = stops.indexOf(toStop);
-    if (fromIndex < 0 || toIndex < 0) return value ?? null;
-    if (indices.length === 0) return stops[toIndex];
-    const min = indices[0];
-    const max = indices[indices.length - 1];
-    const delta = toIndex - fromIndex;
-    const clamped = Math.max(-min, Math.min(stops.length - 1 - max, delta));
-    return groupStopSetFromIndices(
-        indices.map((i) => i + clamped),
-        stops,
+/** Move one run by a stop delta. Other cells stay. */
+export function shiftRunCells(
+    indices: CellIndex[],
+    run: GroupRun,
+    dx: number,
+    dy: number,
+    xCount: number,
+    yCount: number,
+): CellIndex[] {
+    const runKeys = new Set(run.cells.map(indexKey));
+    const others = dedupeIndices(indices).filter(
+        (cell) => !runKeys.has(indexKey(cell)),
     );
+    let minDx = -Infinity;
+    let maxDx = Infinity;
+    let minDy = -Infinity;
+    let maxDy = Infinity;
+    for (const cell of run.cells) {
+        minDx = Math.max(minDx, -cell.xi);
+        maxDx = Math.min(maxDx, xCount - 1 - cell.xi);
+        minDy = Math.max(minDy, -cell.yi);
+        maxDy = Math.min(maxDy, yCount - 1 - cell.yi);
+    }
+    const adx = Math.max(minDx, Math.min(maxDx, dx));
+    const ady = Math.max(minDy, Math.min(maxDy, dy));
+    const moved = run.cells.map((cell) => ({
+        xi: cell.xi + adx,
+        yi: cell.yi + ady,
+    }));
+    return dedupeIndices([...others, ...moved]);
 }
 
-/**
- * Write a note placement for one axis.
- *
- * The function removes the placement when the group has one stop on the axis.
- * It snaps the stop to the group set when the stop is outside the set.
- *
- * @param note - The note to change.
- * @param dimensionId - The dimension of the group.
- * @param axis - The spectrum axis.
- * @param stop - The wanted stop, or null.
- * @param allowed - The stop indices of the group on the axis.
- * @param stops - The stop names of the spectrum.
- */
-function setNotePlacementAxis(
-    note: Note,
-    dimensionId: string,
+/** Resize one run along one axis. Other cells stay. */
+export function resizeRunCells(
+    indices: CellIndex[],
+    run: GroupRun,
     axis: "x" | "y",
-    stop: string | null,
-    allowed: number[],
-    stops: string[] | null | undefined,
-): void {
-    if (!stops || allowed.length <= 1) {
-        if (note.placement?.[dimensionId]) delete note.placement[dimensionId][axis];
-        return;
-    }
-    const wanted = stop ? stops.indexOf(stop) : -1;
-    const target = allowed.includes(wanted)
-        ? wanted
-        : nearestStopIndex(wanted, allowed);
-    if (target < 0) return;
-    if (!note.placement) note.placement = {};
-    if (!note.placement[dimensionId]) note.placement[dimensionId] = {};
-    note.placement[dimensionId][axis] = stops[target];
-}
-
-/**
- * Clean the placement of one note against its group.
- *
- * The function keeps a placement only on a spanned axis. It removes placements
- * that name an unknown stop or a stop outside the group.
- *
- * @param note - The note to change.
- * @param dimensionId - The dimension of the group.
- * @param group - The group of the note.
- * @param xStops - The X stop names, or null.
- * @param yStops - The Y stop names, or null.
- */
-export function normalizeNotePlacement(
-    note: Note,
-    dimensionId: string,
-    group: Group,
-    xStops: string[] | null | undefined,
-    yStops: string[] | null | undefined,
-): void {
-    const placement = note.placement?.[dimensionId];
-    if (!placement) return;
-    const xAllowed = groupStopIndices(group.x, xStops);
-    const yAllowed = groupStopIndices(group.y, yStops);
-    setNotePlacementAxis(
-        note,
-        dimensionId,
-        "x",
-        placement.x ?? null,
-        xAllowed,
-        xStops,
+    edge: "min" | "max",
+    targetIndex: number,
+): CellIndex[] {
+    const runKeys = new Set(run.cells.map(indexKey));
+    const others = dedupeIndices(indices).filter(
+        (cell) => !runKeys.has(indexKey(cell)),
     );
-    setNotePlacementAxis(
-        note,
-        dimensionId,
-        "y",
-        placement.y ?? null,
-        yAllowed,
-        yStops,
-    );
-    if (note.placement?.[dimensionId]) {
-        const rest = note.placement[dimensionId];
-        if (!rest.x && !rest.y) delete note.placement[dimensionId];
+    const fixed = axis === "x"
+        ? edge === "min"
+            ? run.xTo
+            : run.xFrom
+        : edge === "min"
+          ? run.yTo
+          : run.yFrom;
+    const low = Math.min(fixed, targetIndex);
+    const high = Math.max(fixed, targetIndex);
+    const added: CellIndex[] = [];
+    if (axis === "x") {
+        for (let x = low; x <= high; x++) added.push({ xi: x, yi: run.yFrom });
+    } else {
+        for (let y = low; y <= high; y++) added.push({ xi: run.xFrom, yi: y });
     }
-    if (note.placement && Object.keys(note.placement).length === 0) {
-        delete note.placement;
-    }
+    return dedupeIndices([...others, ...added]);
 }
 
-/**
- * Place a note at a stop inside its group.
- *
- * The function writes the placement on each spanned axis. It snaps a stop to
- * the group set when the stop is outside the set. It removes the placement on
- * an axis with one stop.
- *
- * @param note - The note to change.
- * @param dimensionId - The dimension of the group.
- * @param group - The group of the note.
- * @param xStop - The wanted X stop, or null.
- * @param yStop - The wanted Y stop, or null.
- * @param xStops - The X stop names, or null.
- * @param yStops - The Y stop names, or null.
- */
-export function placeNoteInGroup(
-    note: Note,
-    dimensionId: string,
-    group: Group,
-    xStop: string | null,
-    yStop: string | null,
-    xStops: string[] | null | undefined,
-    yStops: string[] | null | undefined,
-): void {
-    const xAllowed = groupStopIndices(group.x, xStops);
-    const yAllowed = groupStopIndices(group.y, yStops);
-    if (xAllowed.length > 1) {
-        setNotePlacementAxis(note, dimensionId, "x", xStop, xAllowed, xStops);
-    } else if (note.placement?.[dimensionId]) {
-        delete note.placement[dimensionId].x;
-    }
-    if (yAllowed.length > 1) {
-        setNotePlacementAxis(note, dimensionId, "y", yStop, yAllowed, yStops);
-    } else if (note.placement?.[dimensionId]) {
-        delete note.placement[dimensionId].y;
-    }
-    if (note.placement?.[dimensionId]) {
-        const rest = note.placement[dimensionId];
-        if (!rest.x && !rest.y) delete note.placement[dimensionId];
-    }
-    if (note.placement && Object.keys(note.placement).length === 0) {
-        delete note.placement;
-    }
+/** Remove one run from the cell list. */
+export function removeRunCells(
+    indices: CellIndex[],
+    run: GroupRun,
+): CellIndex[] {
+    const runKeys = new Set(run.cells.map(indexKey));
+    return dedupeIndices(indices).filter((cell) => !runKeys.has(indexKey(cell)));
 }
 
-/**
- * Remove the placement of a note in one dimension.
- *
- * @param note - The note to change.
- * @param dimensionId - The dimension to clear.
- */
-export function clearNotePlacement(note: Note, dimensionId: string): void {
-    if (!note.placement) return;
-    delete note.placement[dimensionId];
-    if (Object.keys(note.placement).length === 0) delete note.placement;
-}
-
-/**
- * Rename or drop the stops of a group axis value.
- *
- * @param value - The axis value.
- * @param rename - A map from an old stop name to its new name.
- * @param valid - The stop names of the new spectrum.
- * @returns The changed axis value, or null when no stop remains.
- */
-export function remapGroupStopSet(
-    value: GroupStopSet | null | undefined,
-    rename: Map<string, string>,
-    valid: Set<string>,
-): GroupStopSet | null {
-    if (!value) return null;
-    const names = typeof value === "string" ? [value] : value;
-    const next: string[] = [];
-    for (const name of names) {
-        const changed = rename.get(name) ?? name;
-        if (valid.has(changed) && !next.includes(changed)) next.push(changed);
-    }
-    if (next.length === 0) return null;
-    if (next.length === 1) return next[0];
-    return next;
+/** Add one cell to the cell list. */
+export function addCellIndex(
+    indices: CellIndex[],
+    xi: number,
+    yi: number,
+): CellIndex[] {
+    return dedupeIndices([...indices, { xi, yi }]);
 }
 
 /**
@@ -375,58 +284,243 @@ export function remapNotePlacement(
     dimensionId: string,
     axis: "x" | "y",
     rename: Map<string, string>,
-    valid: Set<string>,
+    valid: Set<string> | null,
 ): void {
     const placement = note.placement?.[dimensionId];
     const current = placement?.[axis];
     if (!current) return;
+    if (!valid) {
+        delete placement[axis];
+        return;
+    }
     const changed = rename.get(current) ?? current;
     if (valid.has(changed)) placement[axis] = changed;
     else delete placement[axis];
 }
 
 /**
- * Keep at most one spanned axis for a group.
+ * Rename or drop the stops of a group cell list.
  *
- * The function compares the stop counts of the two axes. It collapses the
- * smaller axis to its first stop. A tie keeps the X axis.
- *
- * @param xValue - The X axis value.
- * @param yValue - The Y axis value.
- * @param xStops - The X stop names, or null.
- * @param yStops - The Y stop names, or null.
- * @returns The clean X and Y axis values.
+ * @param cells - The group cells.
+ * @param xRename - A map from an old X stop to its new name.
+ * @param yRename - A map from an old Y stop to its new name.
+ * @param xValid - The new X stops, or null.
+ * @param yValid - The new Y stops, or null.
+ * @returns The changed cells.
  */
-export function enforceSingleAxisSpan(
-    xValue: GroupStopSet | null,
-    yValue: GroupStopSet | null,
+export function remapGroupCells(
+    cells: GroupCell[],
+    xRename: Map<string, string>,
+    yRename: Map<string, string>,
+    xValid: Set<string> | null,
+    yValid: Set<string> | null,
+): GroupCell[] {
+    const result: GroupCell[] = [];
+    for (const cell of cells) {
+        let x = cell.x ? (xRename.get(cell.x) ?? cell.x) : null;
+        let y = cell.y ? (yRename.get(cell.y) ?? cell.y) : null;
+        if (!xValid) x = null;
+        else if (!x || !xValid.has(x)) continue;
+        if (!yValid) y = null;
+        else if (!y || !yValid.has(y)) continue;
+        result.push({ x, y });
+    }
+    return result;
+}
+
+/** Return the group cell nearest to a wanted stop pair. */
+export function nearestGroupCell(
+    cells: GroupCell[],
+    xStop: string | null,
+    yStop: string | null,
     xStops: string[] | null | undefined,
     yStops: string[] | null | undefined,
-): [GroupStopSet | null, GroupStopSet | null] {
-    let x = normalizeGroupStopSet(xValue, xStops);
-    let y = normalizeGroupStopSet(yValue, yStops);
-    const xCount = groupStopCount(x, xStops);
-    const yCount = groupStopCount(y, yStops);
-    if (xCount > 1 && yCount > 1) {
-        if (xCount >= yCount) {
-            y = groupStopSetFromIndices([groupStopIndices(y, yStops)[0]], yStops);
-        } else {
-            x = groupStopSetFromIndices([groupStopIndices(x, xStops)[0]], xStops);
+): GroupCell {
+    const wantedX = xStops ? xStops.indexOf(xStop ?? "") : 0;
+    const wantedY = yStops ? yStops.indexOf(yStop ?? "") : 0;
+    let best = cells[0];
+    let bestDistance = Infinity;
+    for (const cell of cells) {
+        const xi = xStops ? xStops.indexOf(cell.x ?? "") : 0;
+        const yi = yStops ? yStops.indexOf(cell.y ?? "") : 0;
+        const distance =
+            Math.abs(xi - wantedX) + Math.abs(yi - wantedY);
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            best = cell;
         }
     }
-    return [x, y];
+    return best;
+}
+
+/**
+ * Remove the placement of a note in one dimension.
+ *
+ * @param note - The note to change.
+ * @param dimensionId - The dimension to clear.
+ */
+export function clearNotePlacement(note: Note, dimensionId: string): void {
+    if (!note.placement) return;
+    delete note.placement[dimensionId];
+    if (Object.keys(note.placement).length === 0) delete note.placement;
+}
+
+/**
+ * Place a note at the cell of its group nearest to a wanted pair.
+ *
+ * The function stores an axis only when the group varies on that axis.
+ *
+ * @param note - The note to change.
+ * @param dimensionId - The dimension of the group.
+ * @param cells - The group cells.
+ * @param xStop - The wanted X stop, or null.
+ * @param yStop - The wanted Y stop, or null.
+ * @param xStops - The X stop names, or null.
+ * @param yStops - The Y stop names, or null.
+ */
+export function placeNoteInGroup(
+    note: Note,
+    dimensionId: string,
+    cells: GroupCell[],
+    xStop: string | null,
+    yStop: string | null,
+    xStops: string[] | null | undefined,
+    yStops: string[] | null | undefined,
+): void {
+    const clean = normalizeGroupCells(cells, xStops, yStops);
+    if (clean.length === 0) {
+        clearNotePlacement(note, dimensionId);
+        return;
+    }
+    const target = nearestGroupCell(clean, xStop, yStop, xStops, yStops);
+    writePlacement(note, dimensionId, clean, target, xStops, yStops);
+}
+
+/** Clean the placement of one note against its group cells. */
+export function normalizeNotePlacement(
+    note: Note,
+    dimensionId: string,
+    cells: GroupCell[],
+    xStops: string[] | null | undefined,
+    yStops: string[] | null | undefined,
+): void {
+    const placement = note.placement?.[dimensionId];
+    if (!placement) return;
+    const clean = normalizeGroupCells(cells, xStops, yStops);
+    if (clean.length === 0) {
+        clearNotePlacement(note, dimensionId);
+        return;
+    }
+    const target = nearestGroupCell(
+        clean,
+        placement.x ?? null,
+        placement.y ?? null,
+        xStops,
+        yStops,
+    );
+    writePlacement(note, dimensionId, clean, target, xStops, yStops);
+}
+
+/** Store a placement, keeping only the axes that vary. */
+function writePlacement(
+    note: Note,
+    dimensionId: string,
+    cells: GroupCell[],
+    target: GroupCell,
+    xStops: string[] | null | undefined,
+    yStops: string[] | null | undefined,
+): void {
+    if (cells.length <= 1) {
+        clearNotePlacement(note, dimensionId);
+        return;
+    }
+    setNotePlacementCell(note, dimensionId, target, xStops, yStops);
+}
+
+/**
+ * Store a note cell placement.
+ *
+ * The function keeps every axis that has a spectrum. A missing axis later falls
+ * back to the group cell, so a merge does not move the note.
+ *
+ * @param note - The note to change.
+ * @param dimensionId - The dimension of the group.
+ * @param cell - The cell stop names.
+ * @param xStops - The X stop names, or null.
+ * @param yStops - The Y stop names, or null.
+ */
+export function setNotePlacementCell(
+    note: Note,
+    dimensionId: string,
+    cell: GroupCell,
+    xStops: string[] | null | undefined,
+    yStops: string[] | null | undefined,
+): void {
+    const next: { x?: string; y?: string } = {};
+    if (xStops && cell.x) next.x = cell.x;
+    if (yStops && cell.y) next.y = cell.y;
+    if (!next.x && !next.y) {
+        clearNotePlacement(note, dimensionId);
+        return;
+    }
+    if (!note.placement) note.placement = {};
+    note.placement[dimensionId] = next;
+}
+
+/** Return the index cell nearest to a wanted index cell. */
+export function nearestCellIndex(
+    indices: CellIndex[],
+    wanted: CellIndex,
+): CellIndex {
+    let best = indices[0];
+    let bestDistance = Infinity;
+    for (const cell of indices) {
+        const distance =
+            Math.abs(cell.xi - wanted.xi) + Math.abs(cell.yi - wanted.yi);
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            best = cell;
+        }
+    }
+    return best;
+}
+
+/**
+ * Return the index cell that a note currently uses.
+ *
+ * A missing placement axis falls back to the first group cell. This keeps a
+ * note in place when the group gains or merges cells.
+ *
+ * @param placement - The note placement, or null.
+ * @param indices - The group index cells.
+ * @param xStops - The X stop names, or null.
+ * @param yStops - The Y stop names, or null.
+ * @returns The nearest group cell, or null when the group has no cells.
+ */
+export function effectiveCellIndex(
+    placement: { x?: string; y?: string } | null | undefined,
+    indices: CellIndex[],
+    xStops: string[] | null | undefined,
+    yStops: string[] | null | undefined,
+): CellIndex | null {
+    if (indices.length === 0) return null;
+    const fallback = indices[0];
+    const xIndex = xStops && placement?.x ? xStops.indexOf(placement.x) : -1;
+    const yIndex = yStops && placement?.y ? yStops.indexOf(placement.y) : -1;
+    const wanted: CellIndex = {
+        xi: xIndex >= 0 ? xIndex : fallback.xi,
+        yi: yIndex >= 0 ? yIndex : fallback.yi,
+    };
+    return nearestCellIndex(indices, wanted);
 }
 
 /**
  * Clean the groups and placements of one dimension.
  *
- * The function makes each axis value canonical, applies the one-axis span rule,
- * and removes placements that no longer fit.
- *
  * @param project - The project to change.
  * @param dimensionId - The dimension to clean.
  */
-export function normalizeDimensionSpans(
+export function normalizeDimensionCells(
     project: ProjectData,
     dimensionId: string,
 ): void {
@@ -435,19 +529,17 @@ export function normalizeDimensionSpans(
     const xStops = dim["x-spectrum"]?.stops ?? null;
     const yStops = dim["y-spectrum"]?.stops ?? null;
     for (const group of dim.groups) {
-        const [x, y] = enforceSingleAxisSpan(group.x, group.y, xStops, yStops);
-        group.x = x;
-        group.y = y;
+        group.cells = normalizeGroupCells(group.cells, xStops, yStops);
     }
     for (const note of Object.values(project.notes)) {
         const groupId = note.membership?.[dimensionId];
         const group = groupId
-            ? dim.groups.find((g) => g.id === groupId)
+            ? dim.groups.find((item) => item.id === groupId)
             : undefined;
         if (!group) {
-            if (note.placement) delete note.placement[dimensionId];
+            clearNotePlacement(note, dimensionId);
         } else {
-            normalizeNotePlacement(note, dimensionId, group, xStops, yStops);
+            normalizeNotePlacement(note, dimensionId, group.cells, xStops, yStops);
         }
     }
 }
@@ -457,8 +549,8 @@ export function normalizeDimensionSpans(
  *
  * @param project - The project to change.
  */
-export function normalizeProjectSpans(project: ProjectData): void {
+export function normalizeProjectCells(project: ProjectData): void {
     for (const dimensionId of Object.keys(project.dimensions)) {
-        normalizeDimensionSpans(project, dimensionId);
+        normalizeDimensionCells(project, dimensionId);
     }
 }

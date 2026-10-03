@@ -1,98 +1,136 @@
 import { expect, test } from "bun:test";
 import {
-    contiguousGroupRuns,
-    enforceSingleAxisSpan,
-    groupStopIndices,
-    groupStopSetFromIndices,
-    nearestStopIndex,
-    normalizeGroupStopSet,
-    shiftGroupStopSet,
-    toggleGroupStopRun,
+    cellsToIndices,
+    decomposeGroupRuns,
+    effectiveCellIndex,
+    indicesToCells,
+    normalizeGroupCells,
+    resizeRunCells,
+    shiftRunCells,
 } from "./groupStops";
 
-const stops = ["rebel", "neutral", "loyalist", "crown"];
+const xStops = ["a", "b", "c", "d"];
+const yStops = ["m", "n", "o"];
 
-test("stop sets keep known stops in spectrum order", () => {
-    expect(groupStopIndices("neutral", stops)).toEqual([1]);
-    expect(groupStopIndices(["crown", "rebel", "rebel"], stops)).toEqual([0, 3]);
-    expect(groupStopIndices(["missing", "neutral"], stops)).toEqual([1]);
-    expect(groupStopIndices(null, stops)).toEqual([]);
-    expect(groupStopIndices("rebel", null)).toEqual([]);
-});
-
-test("a stop set collapses to a name when it has one stop", () => {
-    expect(groupStopSetFromIndices([1], stops)).toBe("neutral");
-    expect(groupStopSetFromIndices([3, 0], stops)).toEqual(["rebel", "crown"]);
-    expect(groupStopSetFromIndices([9], stops)).toBeNull();
-    expect(normalizeGroupStopSet(["crown", "rebel"], stops)).toEqual([
-        "rebel",
-        "crown",
-    ]);
-});
-
-test("contiguous runs merge adjacent stops", () => {
-    expect(contiguousGroupRuns([0, 1, 2, 4])).toEqual([
-        { from: 0, to: 2 },
-        { from: 4, to: 4 },
-    ]);
-    expect(contiguousGroupRuns([])).toEqual([]);
-});
-
-test("the nearest allowed stop breaks a tie toward the earlier stop", () => {
-    expect(nearestStopIndex(2, [0, 3])).toBe(3);
-    expect(nearestStopIndex(2, [1, 3])).toBe(1);
-    expect(nearestStopIndex(2, [])).toBe(-1);
-});
-
-test("toggling a run adds, removes, and splits stops", () => {
-    expect(toggleGroupStopRun("rebel", stops, 0, 2)).toEqual([
-        "rebel",
-        "neutral",
-        "loyalist",
-    ]);
+test("cells keep known stops and drop duplicates", () => {
     expect(
-        toggleGroupStopRun(["rebel", "neutral", "loyalist"], stops, 1, 2),
-    ).toBe("rebel");
-    expect(
-        toggleGroupStopRun(["rebel", "neutral", "loyalist"], stops, 1, 1),
-    ).toEqual(["rebel", "loyalist"]);
-    expect(toggleGroupStopRun(["rebel", "neutral", "loyalist"], stops, 0, 2)).toBe(
-        "loyalist",
+        normalizeGroupCells(
+            [
+                { x: "a", y: "m" },
+                { x: "a", y: "m" },
+                { x: "z", y: "m" },
+            ],
+            xStops,
+            yStops,
+        ),
+    ).toEqual([{ x: "a", y: "m" }]);
+    expect(normalizeGroupCells([{ x: null, y: "m" }], xStops, yStops)).toEqual(
+        [],
     );
 });
 
-test("moving a stop set keeps its span length and clamps at the ends", () => {
-    expect(shiftGroupStopSet("neutral", stops, "neutral", "crown")).toBe("crown");
-    expect(
-        shiftGroupStopSet(["rebel", "neutral"], stops, "rebel", "loyalist"),
-    ).toEqual(["loyalist", "crown"]);
-    expect(
-        shiftGroupStopSet(["rebel", "neutral"], stops, "rebel", "rebel"),
-    ).toEqual(["rebel", "neutral"]);
-    expect(
-        shiftGroupStopSet(["loyalist", "crown"], stops, "loyalist", "neutral"),
-    ).toEqual(["neutral", "loyalist"]);
+test("cells decompose into one-axis runs", () => {
+    const horizontal = decomposeGroupRuns([
+        { xi: 0, yi: 0 },
+        { xi: 1, yi: 0 },
+        { xi: 2, yi: 0 },
+    ]);
+    expect(horizontal).toEqual([
+        {
+            xFrom: 0,
+            xTo: 2,
+            yFrom: 0,
+            yTo: 0,
+            cells: [
+                { xi: 0, yi: 0 },
+                { xi: 1, yi: 0 },
+                { xi: 2, yi: 0 },
+            ],
+        },
+    ]);
+
+    const vertical = decomposeGroupRuns([
+        { xi: 1, yi: 0 },
+        { xi: 1, yi: 1 },
+    ]);
+    expect(vertical).toEqual([
+        {
+            xFrom: 1,
+            xTo: 1,
+            yFrom: 0,
+            yTo: 1,
+            cells: [
+                { xi: 1, yi: 0 },
+                { xi: 1, yi: 1 },
+            ],
+        },
+    ]);
+
+    expect(decomposeGroupRuns([{ xi: 3, yi: 2 }]).length).toBe(1);
 });
 
-test("the one axis span rule keeps the larger span and X on a tie", () => {
+test("moving a run shifts only its cells", () => {
+    const indices = [
+        { xi: 0, yi: 0 },
+        { xi: 3, yi: 2 },
+    ];
+    const run = decomposeGroupRuns(indices).find(
+        (item) => item.xFrom === 0 && item.yFrom === 0,
+    )!;
+    expect(shiftRunCells(indices, run, 1, 0, 4, 3)).toEqual([
+        { xi: 3, yi: 2 },
+        { xi: 1, yi: 0 },
+    ]);
+    expect(shiftRunCells(indices, run, 9, 0, 4, 3)).toEqual([
+        { xi: 3, yi: 2 },
+        { xi: 3, yi: 0 },
+    ]);
+});
+
+test("resizing a run extends and shrinks it", () => {
+    const indices = [
+        { xi: 1, yi: 0 },
+        { xi: 3, yi: 2 },
+    ];
+    const run = decomposeGroupRuns(indices).find(
+        (item) => item.xFrom === 1 && item.yFrom === 0,
+    )!;
+    expect(resizeRunCells(indices, run, "x", "max", 3)).toEqual([
+        { xi: 3, yi: 2 },
+        { xi: 1, yi: 0 },
+        { xi: 2, yi: 0 },
+        { xi: 3, yi: 0 },
+    ]);
+    expect(resizeRunCells(indices, run, "x", "max", 1)).toEqual([
+        { xi: 3, yi: 2 },
+        { xi: 1, yi: 0 },
+    ]);
+});
+
+test("a missing placement axis keeps the note in its first cell", () => {
+    // Cells A2(0,1), A1(0,0), B1(1,0), in that order.
+    const indices = [
+        { xi: 0, yi: 1 },
+        { xi: 0, yi: 0 },
+        { xi: 1, yi: 0 },
+    ];
+    expect(effectiveCellIndex(undefined, indices, xStops, yStops)).toEqual({
+        xi: 0,
+        yi: 1,
+    });
     expect(
-        enforceSingleAxisSpan(
-            ["rebel", "neutral", "loyalist", "crown"],
-            ["neutral", "loyalist"],
-            stops,
-            stops,
-        ),
-    ).toEqual([["rebel", "neutral", "loyalist", "crown"], "neutral"]);
+        effectiveCellIndex({ x: "a" }, indices, xStops, yStops),
+    ).toEqual({ xi: 0, yi: 1 });
     expect(
-        enforceSingleAxisSpan(
-            ["rebel", "neutral"],
-            ["loyalist", "crown"],
-            stops,
-            stops,
-        ),
-    ).toEqual([["rebel", "neutral"], "loyalist"]);
-    expect(enforceSingleAxisSpan("rebel", "crown", stops, stops)).toEqual([
-        "rebel",
-        "crown",
+        effectiveCellIndex({ y: "o" }, indices, xStops, yStops),
+    ).toEqual({ xi: 0, yi: 1 });
+});
+
+test("index cells round-trip to names", () => {
+    expect(indicesToCells([{ xi: 0, yi: 1 }], xStops, yStops)).toEqual([
+        { x: "a", y: "n" },
+    ]);
+    expect(cellsToIndices([{ x: "d", y: "o" }], xStops, yStops)).toEqual([
+        { xi: 3, yi: 2 },
     ]);
 });

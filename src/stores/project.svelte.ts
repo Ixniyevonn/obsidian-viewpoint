@@ -1,20 +1,21 @@
-import type { GroupStopSet, ProjectData, Spectrum } from "../types";
+import type { GroupCell, ProjectData, Spectrum } from "../types";
 import { createUndoManager } from "./undo";
 
 import { MIN_NODE_WIDTH, MAX_NODE_WIDTH } from "../utils/nodeWidth";
 import {
+    cellsToIndices,
     clearNotePlacement,
-    groupStopCount,
-    groupStopIndices,
-    groupStopSetFromIndices,
-    normalizeGroupStopSet,
-    normalizeDimensionSpans,
-    normalizeNotePlacement,
-    normalizeProjectSpans,
+    effectiveCellIndex,
+    indicesToCells,
+    nearestCellIndex,
+    normalizeDimensionCells,
+    normalizeGroupCells,
+    normalizeProjectCells,
     placeNoteInGroup,
-    remapGroupStopSet,
+    remapGroupCells,
     remapNotePlacement,
-    toggleGroupStopRun,
+    setNotePlacementCell,
+    type CellIndex,
 } from "../utils/groupStops";
 import { spectrumStopRenameMap } from "../utils/spectrum";
 import { tagNameFromMarkdown } from "../utils/tags";
@@ -75,25 +76,27 @@ export function createProjectStore() {
         return result;
     }
 
+    /** Return true when two cell lists hold the same cells. */
+    function sameCells(a: GroupCell[], b: GroupCell[]): boolean {
+        if (a.length !== b.length) return false;
+        const key = (cell: GroupCell) =>
+            `${cell.x ?? "\u0001"}|${cell.y ?? "\u0001"}`;
+        const set = new Set(a.map(key));
+        return b.every((cell) => set.has(key(cell)));
+    }
+
     /**
-     * Apply a stop change to a group and repair the member placements.
-     *
-     * The X axis is primary. A Y span is refused while the X axis has more than
-     * one stop. An X span collapses the Y axis to its first stop.
+     * Replace the cells of a group and repair the member placements.
      *
      * @param dimensionId - The dimension of the group.
      * @param groupId - The group to change.
-     * @param nextX - The wanted X axis value.
-     * @param nextY - The wanted Y axis value.
-     * @param changed - The axis that the edit targets.
+     * @param cells - The wanted cells.
      * @returns True when the change applies.
      */
-    function commitGroupStops(
+    function applyGroupCells(
         dimensionId: string,
         groupId: string,
-        nextX: GroupStopSet | null,
-        nextY: GroupStopSet | null,
-        changed: "x" | "y" | "both",
+        cells: GroupCell[],
     ): boolean {
         const dim = project.dimensions[dimensionId];
         if (!dim) return false;
@@ -101,31 +104,39 @@ export function createProjectStore() {
         if (!group) return false;
         const xStops = dim["x-spectrum"]?.stops ?? null;
         const yStops = dim["y-spectrum"]?.stops ?? null;
-        let y = normalizeGroupStopSet(nextY, yStops);
-        const x = normalizeGroupStopSet(nextX, xStops);
-        const xCount = groupStopCount(x, xStops);
-        const yCount = groupStopCount(y, yStops);
+        const next = normalizeGroupCells(cells, xStops, yStops);
+        if (sameCells(next, group.cells)) return false;
 
-        if (xCount > 1 && yCount > 1) {
-            if (changed === "y") return false;
-            y = groupStopSetFromIndices([groupStopIndices(y, yStops)[0]], yStops);
-        }
-
-        const currentX = normalizeGroupStopSet(group.x, xStops);
-        const currentY = normalizeGroupStopSet(group.y, yStops);
-        if (
-            JSON.stringify(x) === JSON.stringify(currentX) &&
-            JSON.stringify(y) === JSON.stringify(currentY)
-        ) {
-            return false;
+        // Remember the cell each member uses before the change.
+        const oldIndices = cellsToIndices(group.cells, xStops, yStops);
+        const oldCells = new Map<string, CellIndex>();
+        for (const [noteId, note] of Object.entries(project.notes)) {
+            if (note.membership[dimensionId] !== groupId) continue;
+            const indexCell = effectiveCellIndex(
+                note.placement?.[dimensionId],
+                oldIndices,
+                xStops,
+                yStops,
+            );
+            if (indexCell) oldCells.set(noteId, indexCell);
         }
 
         snap();
-        group.x = x;
-        group.y = y;
-        for (const note of Object.values(project.notes)) {
+        group.cells = next;
+        const newIndices = cellsToIndices(next, xStops, yStops);
+        for (const [noteId, note] of Object.entries(project.notes)) {
             if (note.membership[dimensionId] !== groupId) continue;
-            normalizeNotePlacement(note, dimensionId, group, xStops, yStops);
+            const old = oldCells.get(noteId);
+            if (!old) continue;
+            if (newIndices.length <= 1) {
+                clearNotePlacement(note, dimensionId);
+                continue;
+            }
+            const target = nearestCellIndex(newIndices, old);
+            const [targetCell] = indicesToCells([target], xStops, yStops);
+            if (targetCell) {
+                setNotePlacementCell(note, dimensionId, targetCell, xStops, yStops);
+            }
         }
         touch();
         notify();
@@ -157,7 +168,7 @@ export function createProjectStore() {
 
         load(data: ProjectData) {
             project = data;
-            normalizeProjectSpans(project);
+            normalizeProjectCells(project);
             undo.clear();
         },
 
@@ -210,6 +221,27 @@ export function createProjectStore() {
                 for (const dimId of Object.keys(note.connections)) {
                     note.connections[dimId] = note.connections[dimId].filter(
                         (c) => c.to !== id,
+                    );
+                }
+            }
+            touch();
+            notify();
+        },
+
+        /**
+         * Remove several notes as one undo step.
+         *
+         * @param ids - The note IDs to remove.
+         */
+        removeNotes(ids: string[]) {
+            if (ids.length === 0) return;
+            snap();
+            const removed = new Set(ids);
+            for (const id of ids) delete project.notes[id];
+            for (const note of Object.values(project.notes)) {
+                for (const dimId of Object.keys(note.connections)) {
+                    note.connections[dimId] = note.connections[dimId].filter(
+                        (c) => !removed.has(c.to),
                     );
                 }
             }
@@ -335,7 +367,7 @@ export function createProjectStore() {
                 placeNoteInGroup(
                     note,
                     dimensionId,
-                    group,
+                    group.cells,
                     xStop,
                     yStop,
                     dim?.["x-spectrum"]?.stops ?? null,
@@ -395,37 +427,38 @@ export function createProjectStore() {
             const oldX = dim["x-spectrum"];
             const oldY = dim["y-spectrum"];
 
+            let xRename = new Map<string, string>();
+            let yRename = new Map<string, string>();
+            let xValid: Set<string> | null = null;
+            let yValid: Set<string> | null = null;
+
             if (xSpectrum) {
                 dim["x-spectrum"] = xSpectrum;
-                const xRename = spectrumStopRenameMap(oldX?.stops, xSpectrum.stops);
-                const xValid = new Set(xSpectrum.stops);
-                for (const g of dim.groups) {
-                    g.x = remapGroupStopSet(g.x, xRename, xValid);
-                }
+                xRename = spectrumStopRenameMap(oldX?.stops, xSpectrum.stops);
+                xValid = new Set(xSpectrum.stops);
                 for (const note of Object.values(project.notes)) {
                     remapNotePlacement(note, id, "x", xRename, xValid);
                 }
             } else {
                 delete dim["x-spectrum"];
-                for (const g of dim.groups) g.x = null;
             }
 
             if (ySpectrum) {
                 dim["y-spectrum"] = ySpectrum;
-                const yRename = spectrumStopRenameMap(oldY?.stops, ySpectrum.stops);
-                const yValid = new Set(ySpectrum.stops);
-                for (const g of dim.groups) {
-                    g.y = remapGroupStopSet(g.y, yRename, yValid);
-                }
+                yRename = spectrumStopRenameMap(oldY?.stops, ySpectrum.stops);
+                yValid = new Set(ySpectrum.stops);
                 for (const note of Object.values(project.notes)) {
                     remapNotePlacement(note, id, "y", yRename, yValid);
                 }
             } else {
                 delete dim["y-spectrum"];
-                for (const g of dim.groups) g.y = null;
             }
 
-            normalizeDimensionSpans(project, id);
+            for (const g of dim.groups) {
+                g.cells = remapGroupCells(g.cells, xRename, yRename, xValid, yValid);
+            }
+
+            normalizeDimensionCells(project, id);
 
             touch();
             notify();
@@ -438,7 +471,7 @@ export function createProjectStore() {
             snap();
             const dim = project.dimensions[dimensionId];
             if (dim) {
-                dim.groups.push({ id: groupId, name, x: null, y: null });
+                dim.groups.push({ id: groupId, name, cells: [] });
                 project.node_order[`${dimensionId}:${groupId}`] = [];
             }
             touch();
@@ -456,6 +489,32 @@ export function createProjectStore() {
             touch();
             notify();
             return project;
+        },
+
+        /**
+         * Set the explicit color of a group.
+         *
+         * @param dimensionId - The dimension of the group.
+         * @param groupId - The group to change.
+         * @param color - The color key, or null for the automatic name color.
+         * @returns True when the change applies.
+         */
+        setGroupColor(
+            dimensionId: string,
+            groupId: string,
+            color: string | null,
+        ): boolean {
+            const dim = project.dimensions[dimensionId];
+            const group = dim?.groups.find((g) => g.id === groupId);
+            if (!group) return false;
+            const next = color ?? undefined;
+            if (group.color === next) return false;
+            snap();
+            if (next) group.color = next;
+            else delete group.color;
+            touch();
+            notify();
+            return true;
         },
 
         removeGroup(dimensionId: string, groupId: string) {
@@ -476,50 +535,40 @@ export function createProjectStore() {
             return project;
         },
 
-        setGroupStop(
-            dimensionId: string,
-            groupId: string,
-            axis: "x" | "y",
-            value: GroupStopSet | null,
-        ): boolean {
+        /**
+         * Remove several groups as one undo step.
+         *
+         * @param dimensionId - The dimension of the groups.
+         * @param groupIds - The group IDs to remove.
+         */
+        removeGroups(dimensionId: string, groupIds: string[]) {
+            if (groupIds.length === 0) return;
+            snap();
             const dim = project.dimensions[dimensionId];
-            const group = dim?.groups.find((g) => g.id === groupId);
-            if (!dim || !group) return false;
-            const nextX = axis === "x" ? value : group.x;
-            const nextY = axis === "y" ? value : group.y;
-            return commitGroupStops(dimensionId, groupId, nextX, nextY, axis);
+            if (dim) {
+                const removed = new Set(groupIds);
+                dim.groups = dim.groups.filter((g) => !removed.has(g.id));
+                for (const note of Object.values(project.notes)) {
+                    const groupId = note.membership[dimensionId];
+                    if (groupId && removed.has(groupId)) {
+                        note.membership[dimensionId] = null;
+                        clearNotePlacement(note, dimensionId);
+                    }
+                }
+                for (const groupId of groupIds) {
+                    delete project.node_order[`${dimensionId}:${groupId}`];
+                }
+            }
+            touch();
+            notify();
         },
 
-        toggleGroupRun(
+        setGroupCells(
             dimensionId: string,
             groupId: string,
-            axis: "x" | "y",
-            fromStop: string,
-            toStop: string,
+            cells: GroupCell[],
         ): boolean {
-            const dim = project.dimensions[dimensionId];
-            const group = dim?.groups.find((g) => g.id === groupId);
-            if (!dim || !group) return false;
-            const stops =
-                axis === "x" ? dim["x-spectrum"]?.stops : dim["y-spectrum"]?.stops;
-            if (!stops) return false;
-            const fromIndex = stops.indexOf(fromStop);
-            const toIndex = stops.indexOf(toStop);
-            if (fromIndex < 0 || toIndex < 0) return false;
-            const next = toggleGroupStopRun(group[axis], stops, fromIndex, toIndex);
-            const nextX = axis === "x" ? next : group.x;
-            const nextY = axis === "y" ? next : group.y;
-            return commitGroupStops(dimensionId, groupId, nextX, nextY, axis);
-        },
-
-        moveGroup(
-            dimensionId: string,
-            groupId: string,
-            nextX: GroupStopSet | null,
-            nextY: GroupStopSet | null,
-            changed: "x" | "y" | "both" = "both",
-        ): boolean {
-            return commitGroupStops(dimensionId, groupId, nextX, nextY, changed);
+            return applyGroupCells(dimensionId, groupId, cells);
         },
 
         // --- Connections ---
