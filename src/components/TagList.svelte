@@ -124,7 +124,10 @@
           onRemove(index);
         }}
       >
-        ×
+        <svg aria-hidden="true" viewBox="0 0 8 8" width="8" height="8">
+          <line x1="2" y1="2" x2="6" y2="6" />
+          <line x1="6" y1="2" x2="2" y2="6" />
+        </svg>
       </button>
     </div>
   {/each}
@@ -166,19 +169,24 @@
       {/if}
     </div>
   {:else}
-    <button
-      class="tag-add"
-      type="button"
-      title="Add tag"
-      aria-label="Add tag"
-      onpointerdown={(e) => e.stopPropagation()}
-      onclick={(e) => {
-        e.stopPropagation();
-        startAdd();
-      }}
-    >
-      +
-    </button>
+    <span class="tag-add-slot">
+      <button
+        class="tag-add"
+        type="button"
+        title="Add tag"
+        aria-label="Add tag"
+        onpointerdown={(e) => e.stopPropagation()}
+        onclick={(e) => {
+          e.stopPropagation();
+          startAdd();
+        }}
+      >
+        <svg aria-hidden="true" viewBox="0 0 8 8" width="8" height="8">
+          <line x1="4" y1="2" x2="4" y2="6" />
+          <line x1="2" y1="4" x2="6" y2="4" />
+        </svg>
+      </button>
+    </span>
   {/if}
 </div>
 
@@ -191,11 +199,11 @@
   }
 
   .tag-chip {
+    position: relative;
     display: inline-flex;
     align-items: center;
-    gap: 3px;
     max-width: 100%;
-    padding: 1px 4px 1px 6px;
+    padding: 1px 6px;
     border: 1px solid var(--tag-color);
     border-radius: var(--radius-s);
     background: color-mix(in srgb, var(--tag-color) 16%, transparent);
@@ -223,51 +231,91 @@
   }
 
   .tag-remove {
+    position: absolute;
+    top: -6px;
+    right: -6px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 14px;
     height: 14px;
     padding: 0;
-    border: none;
-    border-radius: var(--radius-s);
-    background: transparent;
-    color: var(--text-faint);
-    font-size: 12px;
-    line-height: 1;
+    border: 1px solid var(--tag-color);
+    border-radius: 50%;
+    background: var(--background-primary);
+    color: var(--text-muted);
     cursor: pointer;
     opacity: 0;
+    pointer-events: none;
+    transition: opacity 100ms ease;
   }
 
-  .tag-chip:hover .tag-remove {
+  .tag-remove svg {
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+  }
+
+  .tag-chip:hover .tag-remove,
+  .tag-remove:focus-visible {
     opacity: 1;
+    pointer-events: auto;
   }
 
   .tag-remove:hover {
     color: var(--text-error);
+    border-color: var(--text-error);
+  }
+
+  .tag-add-slot {
+    position: relative;
+    align-self: center;
+    width: 0;
+    height: 0;
   }
 
   .tag-add {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 1;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 18px;
     height: 18px;
     padding: 0;
-    border: 1px dashed var(--background-modifier-border);
+    border: 1px dashed var(--text-faint);
     border-radius: var(--radius-s);
-    background: transparent;
-    color: var(--text-faint);
-    font-size: 14px;
-    line-height: 1;
+    background: var(--background-primary);
+    color: var(--text-muted);
     cursor: pointer;
-    opacity: 0.5;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 100ms ease;
+  }
+
+  :global(.node-card:hover) .tag-add,
+  .tag-add:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .tag-add svg {
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
   }
 
   .tag-add:hover {
-    opacity: 1;
     color: var(--text-normal);
     border-color: var(--interactive-accent);
+    background: var(--background-modifier-hover);
   }
 
   .tag-input-wrapper {
