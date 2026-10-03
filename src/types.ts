@@ -4,11 +4,25 @@ export interface Spectrum {
     stops: string[];
 }
 
+/**
+ * The stops that a group uses on one spectrum axis.
+ *
+ * A string gives one stop. A string array gives a set of stops. A group uses
+ * at most one axis with more than one stop.
+ */
+export type GroupStopSet = string | string[];
+
 export interface Group {
     id: string;
     name: string;
-    x: string | null;
-    y: string | null;
+    x: GroupStopSet | null;
+    y: GroupStopSet | null;
+}
+
+/** The stops that a note uses inside its group, per spectrum axis. */
+export interface Placement {
+    x?: string;
+    y?: string;
 }
 
 export interface Dimension {
@@ -31,6 +45,8 @@ export interface Note {
     tags?: string[];
     membership: Record<string, string | null>;
     connections: Record<string, { to: string; label: string | null }[]>;
+    /** Stop placement inside the group, keyed by dimension ID. */
+    placement?: Record<string, Placement>;
 }
 
 export interface Connection {

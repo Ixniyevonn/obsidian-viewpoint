@@ -1,16 +1,5 @@
 import type { Note } from "../types";
-
-/** Color variables that Obsidian supplies for every theme. */
-const TAG_COLOR_VARIABLES = [
-    "--color-red",
-    "--color-orange",
-    "--color-yellow",
-    "--color-green",
-    "--color-cyan",
-    "--color-blue",
-    "--color-purple",
-    "--color-pink",
-];
+import { hashColorVariable } from "./color";
 
 const WIKI_LINK = /\[\[([^\]|#]*)(?:#[^\]|]*)?(?:\|([^\]]*))?\]\]/g;
 const MARKDOWN_LINK = /\[([^\]]*)\]\(([^)]+)\)/g;
@@ -100,12 +89,7 @@ export function tagNameFromMarkdown(markdown: string): string {
  */
 export function tagColorVariable(markdown: string): string {
     const name = tagNameFromMarkdown(markdown).toLowerCase();
-    let hash = 2166136261;
-    for (let i = 0; i < name.length; i++) {
-        hash ^= name.charCodeAt(i);
-        hash = Math.imul(hash, 16777619);
-    }
-    return TAG_COLOR_VARIABLES[(hash >>> 0) % TAG_COLOR_VARIABLES.length];
+    return hashColorVariable(name);
 }
 
 /**

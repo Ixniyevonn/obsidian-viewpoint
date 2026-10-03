@@ -7,6 +7,7 @@
         width: number;
         height: number;
         name: string;
+        color?: string;
         highlight?: boolean;
         selected?: boolean;
         draggable?: boolean;
@@ -22,6 +23,7 @@
         width,
         height,
         name,
+        color,
         highlight = false,
         selected = false,
         draggable = false,
@@ -115,7 +117,8 @@
         ? ' group-selected'
         : ''}{draggable ? ' group-draggable' : ''}{beingDragged
         ? ' group-being-dragged'
-        : ''}"
+        : ''}{color ? ' group-complex' : ''}"
+    groupColor={color}
 >
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
@@ -146,6 +149,12 @@
                 onpointerdown={handleBodyPointerDown}
                 onpointermove={handleBodyPointerMove}
             >
+                {#if color}
+                    <span
+                        class="group-color-dot"
+                        style:background-color={`var(${color})`}
+                    ></span>
+                {/if}
                 {name}
                 {#if draggable}
                     <span
@@ -201,6 +210,29 @@
         opacity: 0.25;
         pointer-events: none;
     }
+    :global(.node-group.group-complex) {
+        border-color: color-mix(
+            in srgb,
+            var(--group-color) 55%,
+            var(--background-modifier-border)
+        );
+        background: color-mix(
+            in srgb,
+            var(--group-color) 10%,
+            transparent
+        );
+    }
+    :global(.node-group.group-complex.group-selected) {
+        border-color: var(--interactive-accent);
+        background: color-mix(
+            in srgb,
+            var(--group-color) 16%,
+            transparent
+        );
+    }
+    :global(.node-group.group-complex.group-drop-target) {
+        border-color: var(--interactive-accent);
+    }
 
     .group-click-catcher {
         position: absolute;
@@ -251,6 +283,14 @@
         color: var(--text-faint);
         opacity: 0.5;
         cursor: grab;
+    }
+
+    .group-color-dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex: 0 0 auto;
     }
 
     :global(.node-group.group-draggable) .group-label {

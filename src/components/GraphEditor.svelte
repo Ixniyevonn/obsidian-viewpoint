@@ -4,8 +4,15 @@
   import type DimGraphPlugin from "../main";
   import type { ProjectStore } from "../stores/project.svelte";
   import { createUiStore } from "../stores/ui.svelte";
-  import type { Dimension, Spectrum } from "../types";
+  import type { Dimension, ProjectData, Spectrum } from "../types";
   import { generateId } from "../utils/helpers";
+  import {
+    groupStopCount,
+    groupStopIndices,
+    groupStopSetFromIndices,
+    shiftGroupStopSet,
+    toggleGroupStopRun,
+  } from "../utils/groupStops";
   import { layoutEngine } from "../utils/layout";
   import { collectTagSuggestions } from "../utils/tags";
   import type { FontConfig } from "../utils/textMeasure";
@@ -72,14 +79,14 @@
   // --- Helpers ---
 
   function groupAtPoint(wx: number, wy: number): string | null {
-    for (const [groupId, g] of Object.entries(layout.groups)) {
+    for (const box of layout.groupBoxes) {
       if (
-        wx >= g.x &&
-        wx <= g.x + g.width &&
-        wy >= g.y &&
-        wy <= g.y + g.height
+        wx >= box.x &&
+        wx <= box.x + box.width &&
+        wy >= box.y &&
+        wy <= box.y + box.height
       ) {
-        return groupId;
+        return box.groupId;
       }
     }
     return null;
@@ -172,10 +179,17 @@
   let draggingGroupId = $state<string | null>(null);
   let groupDragGhostX = $state(0);
   let groupDragGhostY = $state(0);
-  let groupDragStartX = 0;
-  let groupDragStartY = 0;
+  let groupDragStartX = $state(0);
+  let groupDragStartY = $state(0);
   let groupDragTracking = false;
   let groupDragTrackingId: string | null = null;
+  let groupDragMode = $state<"move" | "toggle">("move");
+  let groupDragAnchorXStop = $state<string | null>(null);
+  let groupDragAnchorYStop = $state<string | null>(null);
+  let groupToggleAxis = $state<"x" | "y" | null>(null);
+  let groupToggleTargetStop = $state<string | null>(null);
+  let groupMoveTargetXStop = $state<string | null>(null);
+  let groupMoveTargetYStop = $state<string | null>(null);
   const GROUP_DRAG_THRESHOLD = 8;
 
   function handlePointerMove(e: PointerEvent) {
@@ -199,15 +213,108 @@
     if (draggingGroupId) {
       groupDragGhostX = world.x;
       groupDragGhostY = world.y;
+      groupMoveTargetXStop = findNearestXStop(world.x);
+      groupMoveTargetYStop = findNearestYStop(world.y);
+
+      if (groupDragMode === "toggle") {
+        const dx = Math.abs(world.x - groupDragStartX);
+        const dy = Math.abs(world.y - groupDragStartY);
+        if (layout.xSpectrum && dx >= dy) {
+          groupToggleAxis = "x";
+          groupToggleTargetStop = findNearestXStop(world.x);
+        } else if (layout.ySpectrum) {
+          groupToggleAxis = "y";
+          groupToggleTargetStop = findNearestYStop(world.y);
+        }
+      }
     }
   }
 
   function handleGroupPointerDown(groupId: string, e: PointerEvent) {
     if (e.button !== 0 || !hasSpectra || groupId === "__ungrouped") return;
+    const world = canvasRef?.clientToWorld(e.clientX, e.clientY) ?? {
+      x: ui.cursorWorldX,
+      y: ui.cursorWorldY,
+    };
     groupDragTracking = true;
     groupDragTrackingId = groupId;
-    groupDragStartX = ui.cursorWorldX;
-    groupDragStartY = ui.cursorWorldY;
+    groupDragStartX = world.x;
+    groupDragStartY = world.y;
+    groupDragAnchorXStop = findNearestXStop(world.x);
+    groupDragAnchorYStop = findNearestYStop(world.y);
+    groupDragMode = e.shiftKey ? "toggle" : "move";
+  }
+
+  /**
+   * Compute the stop values that the group would have after this drag.
+   *
+   * @returns The wanted X and Y values, the changed axis, or null.
+   */
+  function computePendingGroupStops() {
+    if (!draggingGroupId) return null;
+    const dimId = ui.activeDimensionId;
+    if (!dimId) return null;
+    const dim = project.project.dimensions[dimId];
+    const group = dim?.groups.find((g) => g.id === draggingGroupId);
+    if (!dim || !group) return null;
+    const xStops = dim["x-spectrum"]?.stops ?? null;
+    const yStops = dim["y-spectrum"]?.stops ?? null;
+
+    if (groupDragMode === "toggle") {
+      const axis = groupToggleAxis;
+      const target = groupToggleTargetStop;
+      const anchor = axis === "x" ? groupDragAnchorXStop : groupDragAnchorYStop;
+      const stops = axis === "x" ? xStops : yStops;
+      if (!axis || !target || !anchor || !stops) return null;
+      if (target === anchor) return null;
+      const fromIndex = stops.indexOf(anchor);
+      const toIndex = stops.indexOf(target);
+      if (fromIndex < 0 || toIndex < 0) return null;
+      const toggled = toggleGroupStopRun(group[axis], stops, fromIndex, toIndex);
+      let x = axis === "x" ? toggled : group.x;
+      let y = axis === "y" ? toggled : group.y;
+      if (groupStopCount(x, xStops) > 1 && groupStopCount(y, yStops) > 1) {
+        if (axis === "y") return null;
+        y = groupStopSetFromIndices([groupStopIndices(y, yStops)[0]], yStops);
+      }
+      return { x, y, changed: axis };
+    }
+
+    let x = group.x;
+    let y = group.y;
+    if (xStops && groupDragAnchorXStop && groupMoveTargetXStop) {
+      x = shiftGroupStopSet(
+        group.x,
+        xStops,
+        groupDragAnchorXStop,
+        groupMoveTargetXStop,
+      );
+    }
+    if (yStops && groupDragAnchorYStop && groupMoveTargetYStop) {
+      y = shiftGroupStopSet(
+        group.y,
+        yStops,
+        groupDragAnchorYStop,
+        groupMoveTargetYStop,
+      );
+    }
+    return { x, y, changed: "both" as const };
+  }
+
+  const pendingGroupStops = $derived.by(computePendingGroupStops);
+
+  /** Apply a finished group drag: move the group or toggle a stop run. */
+  function commitGroupDrag() {
+    const dimId = ui.activeDimensionId;
+    const pending = computePendingGroupStops();
+    if (!dimId || !draggingGroupId || !pending) return;
+    project.moveGroup(
+      dimId,
+      draggingGroupId,
+      pending.x,
+      pending.y,
+      pending.changed,
+    );
   }
 
   function handlePointerUp(_e: PointerEvent) {
@@ -217,41 +324,44 @@
       const wy = ui.dragGhostY;
 
       let targetGroupId: string | null = null;
-      for (const [groupId, g] of Object.entries(layout.groups)) {
-        if (groupId === "__ungrouped") continue;
+      for (const box of layout.groupBoxes) {
+        if (box.groupId === "__ungrouped") continue;
         if (
-          wx >= g.x &&
-          wx <= g.x + g.width &&
-          wy >= g.y &&
-          wy <= g.y + g.height
+          wx >= box.x &&
+          wx <= box.x + box.width &&
+          wy >= box.y &&
+          wy <= box.y + box.height
         ) {
-          targetGroupId = groupId;
+          targetGroupId = box.groupId;
           break;
         }
       }
 
       if (ui.activeDimensionId) {
-        project.setNoteMembership(nodeId, ui.activeDimensionId, targetGroupId);
+        const dimId = ui.activeDimensionId;
+        project.moveNoteToGroup(
+          nodeId,
+          dimId,
+          targetGroupId,
+          findNearestXStop(wx),
+          findNearestYStop(wy),
+        );
       }
 
       ui.endDrag();
     }
 
     if (draggingGroupId && ui.activeDimensionId && hasSpectra) {
-      const xStop = findNearestXStop(groupDragGhostX);
-      const yStop = findNearestYStop(groupDragGhostY);
-
-      if (layout.xSpectrum && xStop !== null) {
-        project.setGroupStop(ui.activeDimensionId, draggingGroupId, "x", xStop);
-      }
-      if (layout.ySpectrum && yStop !== null) {
-        project.setGroupStop(ui.activeDimensionId, draggingGroupId, "y", yStop);
-      }
+      commitGroupDrag();
     }
 
     draggingGroupId = null;
     groupDragTracking = false;
     groupDragTrackingId = null;
+    groupToggleAxis = null;
+    groupToggleTargetStop = null;
+    groupMoveTargetXStop = null;
+    groupMoveTargetYStop = null;
   }
 
   function handleGroupRename(groupId: string, newName: string) {
@@ -338,6 +448,10 @@
       if (draggingGroupId) {
         draggingGroupId = null;
         groupDragTracking = false;
+        groupToggleAxis = null;
+        groupToggleTargetStop = null;
+        groupMoveTargetXStop = null;
+        groupMoveTargetYStop = null;
         return;
       }
       if (ui.isDraggingNode) {
@@ -487,17 +601,55 @@
     };
   });
 
-  const groupDragGhost = $derived.by(() => {
-    if (!draggingGroupId) return null;
-    const gl = layout.groups[draggingGroupId];
-    if (!gl) return null;
-    return {
-      x: groupDragGhostX - gl.width / 2,
-      y: groupDragGhostY - gl.height / 2,
-      width: gl.width,
-      height: gl.height,
-      name: gl.name,
+  /** Layout of the project after the current group drag, or null. */
+  const previewLayout = $derived.by(() => {
+    const pending = pendingGroupStops;
+    const dimId = ui.activeDimensionId;
+    if (!pending || !dimId || !draggingGroupId) return null;
+    const dim = project.project.dimensions[dimId];
+    if (!dim) return null;
+    const previewProject: ProjectData = {
+      ...project.project,
+      dimensions: {
+        ...project.project.dimensions,
+        [dimId]: {
+          ...dim,
+          groups: dim.groups.map((g) =>
+            g.id === draggingGroupId
+              ? { ...g, x: pending.x, y: pending.y }
+              : g,
+          ),
+        },
+      },
     };
+    return layoutEngine(previewProject, dimId, { fonts, measuredHeights });
+  });
+
+  const groupDragHint = $derived.by(() => {
+    if (!draggingGroupId) return null;
+    if (groupDragMode === "toggle") {
+      const dx = Math.abs(groupDragGhostX - groupDragStartX);
+      const dy = Math.abs(groupDragGhostY - groupDragStartY);
+      if (layout.xSpectrum && dx >= dy) {
+        const to = findNearestXStop(groupDragGhostX);
+        if (groupDragAnchorXStop && to) {
+          return `Shift-drag toggles X run: ${groupDragAnchorXStop} to ${to}`;
+        }
+      } else if (layout.ySpectrum) {
+        const to = findNearestYStop(groupDragGhostY);
+        if (groupDragAnchorYStop && to) {
+          return `Shift-drag toggles Y run: ${groupDragAnchorYStop} to ${to}`;
+        }
+      }
+      return "Shift-drag to span stops";
+    }
+    const xStop = findNearestXStop(groupDragGhostX);
+    const yStop = findNearestYStop(groupDragGhostY);
+    const parts: string[] = [];
+    if (xStop) parts.push(`X: ${xStop}`);
+    if (yStop) parts.push(`Y: ${yStop}`);
+    if (parts.length === 0) return null;
+    return `Drop to place at ${parts.join(" ")}`;
   });
 
   const groupSnapTarget = $derived.by(() => {
@@ -523,15 +675,15 @@
     if (!ui.isDraggingNode) return null;
     const wx = ui.dragGhostX;
     const wy = ui.dragGhostY;
-    for (const [groupId, g] of Object.entries(layout.groups)) {
-      if (groupId === "__ungrouped") continue;
+    for (const box of layout.groupBoxes) {
+      if (box.groupId === "__ungrouped") continue;
       if (
-        wx >= g.x &&
-        wx <= g.x + g.width &&
-        wy >= g.y &&
-        wy <= g.y + g.height
+        wx >= box.x &&
+        wx <= box.x + box.width &&
+        wy >= box.y &&
+        wy <= box.y + box.height
       ) {
-        return groupId;
+        return box.groupId;
       }
     }
     return null;
@@ -570,11 +722,9 @@
       </div>
     {/if}
 
-    {#if draggingGroupId && groupSnapTarget}
+    {#if draggingGroupId && groupDragHint}
       <div class="connection-hint snap-hint">
-        Drop to place at{groupSnapTarget.xStop
-          ? ` X: ${groupSnapTarget.xStop}`
-          : ""}{groupSnapTarget.yStop ? ` Y: ${groupSnapTarget.yStop}` : ""}
+        {groupDragHint}
       </div>
     {/if}
 
@@ -588,49 +738,79 @@
         ySpectrum={layout.ySpectrum}
       />
 
-      {#each Object.entries(layout.groups) as [groupId, g]}
-        <NodeGroup
-          x={g.x}
-          y={g.y}
-          width={g.width}
-          height={g.height}
-          name={g.name}
-          highlight={dropTargetGroupId === groupId}
-          selected={ui.isGroupSelected(groupId)}
-          draggable={hasSpectra && groupId !== "__ungrouped"}
-          beingDragged={draggingGroupId === groupId}
-          onSelect={(e) => handleGroupSelect(groupId, e)}
-          onRename={ui.activeDimensionId
-            ? (newName) => handleGroupRename(groupId, newName)
-            : undefined}
-          onDragStart={(e) => handleGroupPointerDown(groupId, e)}
-        />
-      {/each}
+      {#if previewLayout}
+        {#each previewLayout.groupBoxes as box (box.groupId + ":" + box.x + ":" + box.y)}
+          <div
+            class="preview-group"
+            style:left="{box.x}px"
+            style:top="{box.y}px"
+            style:width="{box.width}px"
+            style:height="{box.height}px"
+            style:--group-color={box.color ? `var(${box.color})` : undefined}
+          >
+            <span class="preview-group-label">{box.name}</span>
+          </div>
+        {/each}
+      {:else}
+        {#each layout.groupBoxes as box (box.groupId + ":" + box.x + ":" + box.y)}
+          <NodeGroup
+            x={box.x}
+            y={box.y}
+            width={box.width}
+            height={box.height}
+            name={box.name}
+            color={box.color}
+            highlight={dropTargetGroupId === box.groupId}
+            selected={ui.isGroupSelected(box.groupId)}
+            draggable={hasSpectra && box.groupId !== "__ungrouped"}
+            beingDragged={draggingGroupId === box.groupId}
+            onSelect={(e) => handleGroupSelect(box.groupId, e)}
+            onRename={ui.activeDimensionId
+              ? (newName) => handleGroupRename(box.groupId, newName)
+              : undefined}
+            onDragStart={(e) => handleGroupPointerDown(box.groupId, e)}
+          />
+        {/each}
+      {/if}
 
-      <SVGLayer {project} {ui} {layout} />
+      <SVGLayer {project} {ui} layout={previewLayout ?? layout} />
 
-      {#each Object.entries(layout.nodes) as [noteId, pos] (noteId)}
-        <NodeCard
-          width={pos.width}
-          columnWidths={Object.entries(layout.nodes)
-            .filter(([id, node]) => id !== noteId && Math.abs(node.x - pos.x) < 1)
-            .map(([, node]) => node.width)}
-          height={pos.height}
-          x={pos.x}
-          y={pos.y}
-          {app}
-          {noteId}
-          title={project.project.notes[noteId].title}
-          short={project.project.notes[noteId].short}
-          long={project.project.notes[noteId].long}
-          tags={project.project.notes[noteId].tags ?? []}
-          suggestions={tagSuggestions}
-          {parentComponent}
-          {ui}
-          {project}
-          onMeasured={handleNodeMeasured}
-        />
-      {/each}
+      {#if previewLayout}
+        {#each Object.entries(previewLayout.nodes) as [noteId, pos] (noteId)}
+          <div
+            class="preview-node"
+            style:left="{pos.x}px"
+            style:top="{pos.y}px"
+            style:width="{pos.width}px"
+            style:min-height="{pos.height}px"
+          >
+            <span class="preview-node-title">{project.project.notes[noteId].title}</span>
+          </div>
+        {/each}
+      {:else}
+        {#each Object.entries(layout.nodes) as [noteId, pos] (noteId)}
+          <NodeCard
+            width={pos.width}
+            columnWidths={Object.entries(layout.nodes)
+              .filter(([id, node]) => id !== noteId && Math.abs(node.x - pos.x) < 1)
+              .map(([, node]) => node.width)}
+            height={pos.height}
+            x={pos.x}
+            y={pos.y}
+            {app}
+            {noteId}
+            title={project.project.notes[noteId].title}
+            short={project.project.notes[noteId].short}
+            long={project.project.notes[noteId].long}
+            tags={project.project.notes[noteId].tags ?? []}
+            suggestions={tagSuggestions}
+            {parentComponent}
+            {ui}
+            {project}
+            onMeasured={handleNodeMeasured}
+          />
+        {/each}
+      {/if}
 
       {#if dragGhost}
         <div
@@ -641,18 +821,6 @@
           style:min-height="{dragGhost.height}px"
         >
           <h1>{dragGhost.title}</h1>
-        </div>
-      {/if}
-
-      {#if groupDragGhost}
-        <div
-          class="drag-ghost group-drag-ghost"
-          style:left="{groupDragGhost.x}px"
-          style:top="{groupDragGhost.y}px"
-          style:width="{groupDragGhost.width}px"
-          style:min-height="{groupDragGhost.height}px"
-        >
-          <span class="group-drag-label">{groupDragGhost.name}</span>
         </div>
       {/if}
 
@@ -753,18 +921,50 @@
     pointer-events: none;
     z-index: 100;
   }
-  .group-drag-ghost {
-    background-color: var(--background-secondary);
+  .preview-group {
+    position: absolute;
+    box-sizing: border-box;
     border: 2px dashed var(--interactive-accent);
-    display: flex;
-    align-items: flex-start;
-    justify-content: flex-start;
+    border-radius: var(--radius-m);
+    background: color-mix(
+      in srgb,
+      var(--group-color, var(--interactive-accent)) 12%,
+      transparent
+    );
+    pointer-events: none;
+    z-index: 90;
   }
-  .group-drag-label {
-    font-size: 20px;
+  .preview-group-label {
+    display: block;
+    padding: 8px 12px;
+    font-size: 24px;
     font-weight: 700;
     color: var(--text-muted);
-    opacity: 0.8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .preview-node {
+    position: absolute;
+    box-sizing: border-box;
+    display: flex;
+    align-items: flex-start;
+    padding: 8px 16px;
+    background: color-mix(
+      in srgb,
+      var(--background-primary) 70%,
+      transparent
+    );
+    border: 2px dashed var(--interactive-accent);
+    border-radius: var(--radius-m);
+    opacity: 0.85;
+    pointer-events: none;
+    z-index: 91;
+  }
+  .preview-node-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-normal);
   }
 
   .snap-crosshair {

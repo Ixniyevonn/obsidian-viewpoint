@@ -8,6 +8,7 @@
     x: number;
     y: number;
     cssClass?: string;
+    groupColor?: string;
     onclick?: (e: MouseEvent) => void;
     ondblclick?: (e: MouseEvent) => void;
     oncontextmenu?: (e: MouseEvent) => void;
@@ -22,6 +23,7 @@
     x,
     y,
     cssClass = "",
+    groupColor,
     onclick,
     ondblclick,
     oncontextmenu,
@@ -36,6 +38,7 @@
   style:min-height={`${height}px`}
   style:left={`${x}px`}
   style:top={`${y}px`}
+  style:--group-color={groupColor ? `var(${groupColor})` : undefined}
   use:flip={{ x, y }}
   {onclick}
   {ondblclick}
