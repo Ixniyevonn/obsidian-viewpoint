@@ -39,7 +39,45 @@
   let dragFromIdx = $state(-1);
   let dragOverIdx = $state(-1);
 
+  let showDiscardConfirm = $state(false);
+
+  function formSnapshot(): string {
+    return JSON.stringify({
+      name,
+      xEnabled,
+      xName,
+      xPoleA,
+      xPoleB,
+      xStops,
+      yEnabled,
+      yName,
+      yPoleA,
+      yPoleB,
+      yStops,
+    });
+  }
+
+  const initialSnapshot = formSnapshot();
+  const isDirty = $derived(formSnapshot() !== initialSnapshot);
+
   onMount(() => nameInputEl?.focus());
+
+  function requestClose() {
+    if (isDirty) {
+      showDiscardConfirm = true;
+    } else {
+      onCancel();
+    }
+  }
+
+  function keepEditing() {
+    showDiscardConfirm = false;
+  }
+
+  function confirmDiscard() {
+    showDiscardConfirm = false;
+    onCancel();
+  }
 
   function buildSpectrum(
     enabled: boolean,
@@ -75,9 +113,12 @@
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === "Escape") {
       e.stopPropagation();
-      onCancel();
+      if (showDiscardConfirm) keepEditing();
+      else requestClose();
+      return;
     }
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      if (showDiscardConfirm) return;
       e.preventDefault();
       handleConfirm();
     }
@@ -139,14 +180,13 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="dialog-backdrop"
-  onclick={() => onCancel()}
+  onclick={requestClose}
   onkeydown={handleKeydown}
 >
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="dialog"
     onclick={(e) => e.stopPropagation()}
-    onkeydown={handleKeydown}
   >
     <h2>{existing ? "Edit Dimension" : "New Dimension"}</h2>
 
@@ -321,7 +361,7 @@
     </div>
 
     <div class="dialog-actions">
-      <button type="button" class="btn-cancel" onclick={() => onCancel()}>Cancel</button>
+      <button type="button" class="btn-cancel" onclick={requestClose}>Cancel</button>
       <button type="button"
         class="btn-confirm"
         onclick={handleConfirm}
@@ -331,6 +371,39 @@
       </button>
     </div>
   </div>
+
+  {#if showDiscardConfirm}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="confirm-backdrop"
+      onclick={(e) => {
+        e.stopPropagation();
+        keepEditing();
+      }}
+    >
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="confirm-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="discard-title"
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={handleKeydown}
+      >
+        <p id="discard-title" class="confirm-message">
+          Discard the unsaved changes to this dimension?
+        </p>
+        <div class="dialog-actions">
+          <button type="button" class="btn-cancel" onclick={keepEditing}>
+            Keep editing
+          </button>
+          <button type="button" class="btn-danger" onclick={confirmDiscard}>
+            Discard
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -558,5 +631,45 @@
   .btn-confirm:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+
+  .confirm-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  .confirm-dialog {
+    width: 320px;
+    max-width: 84vw;
+    padding: 20px;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-m);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  }
+
+  .confirm-message {
+    margin: 0 0 16px;
+    font-size: var(--font-ui-small);
+    color: var(--text-normal);
+  }
+
+  .btn-danger {
+    padding: 6px 16px;
+    border-radius: var(--radius-s);
+    font-size: var(--font-ui-small);
+    cursor: pointer;
+    background: var(--color-red);
+    color: var(--text-on-accent);
+    border: 1px solid var(--color-red);
+    font-weight: 600;
+  }
+  .btn-danger:hover {
+    filter: brightness(1.1);
   }
 </style>
