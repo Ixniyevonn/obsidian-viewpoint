@@ -423,8 +423,38 @@
 
   // --- Scroll-wheel axis switching ---
 
+  /**
+   * Return true when the event target can scroll or accepts text input.
+   *
+   * The wheel handler keeps its default action for these targets. The check
+   * stops at the Viewpoint root.
+   *
+   * @param target - The event target.
+   * @param root - The element with the wheel handler.
+   * @returns True when the target is scrollable or an input field.
+   */
+  function targetIsScrollable(target: EventTarget | null, root: EventTarget | null): boolean {
+    if (!(target instanceof Element)) return false;
+    if (target.closest("input, textarea, [contenteditable='true']")) return true;
+    let el: HTMLElement | null = target as HTMLElement;
+    while (el) {
+      if (el.scrollHeight > el.clientHeight) {
+        const overflowY = getComputedStyle(el).overflowY;
+        if (overflowY === "auto" || overflowY === "scroll") return true;
+      }
+      if (el === root) break;
+      el = el.parentElement;
+    }
+    return false;
+  }
+
+  /**
+   * Cycle dimensions on a plain wheel. Only the Viewpoint canvas receives this
+   * handler, so a wheel over any other Obsidian pane scrolls that pane.
+   */
   function onWheel(e: WheelEvent) {
     if (e.ctrlKey || dialogMode) return;
+    if (targetIsScrollable(e.target, e.currentTarget)) return;
     const dimIds = Object.keys(project.project.dimensions);
     if (!dimIds.length) return;
     e.preventDefault();
@@ -432,11 +462,9 @@
   }
 
   onMount(() => {
-    window.addEventListener("wheel", onWheel, { passive: false });
     if (canvasAreaEl) {
       fonts = detectFonts(canvasAreaEl);
     }
-    return () => window.removeEventListener("wheel", onWheel);
   });
 
   // --- Drag ghost derived ---
@@ -513,6 +541,7 @@
   role="application"
   onpointermove={handlePointerMove}
   onpointerup={handlePointerUp}
+  onwheel={onWheel}
 >
   <div class="canvas-area" bind:this={canvasAreaEl}>
     <AxisSwitcher {project} {ui} onOpenDialog={handleOpenDialog} />
