@@ -67,7 +67,7 @@
     }
 
     function handleLabelClick(e: MouseEvent) {
-        if (e.button !== 0) return;
+        if (e.button !== 0 || didMove) return;
         e.stopPropagation();
         onSelect?.(e);
     }
@@ -143,6 +143,8 @@
                 class="group-label"
                 onclick={handleLabelClick}
                 ondblclick={startEdit}
+                onpointerdown={handleBodyPointerDown}
+                onpointermove={handleBodyPointerMove}
             >
                 {name}
                 {#if draggable}
@@ -233,6 +235,7 @@
         text-overflow: ellipsis;
         pointer-events: auto;
         cursor: default;
+        user-select: none;
         display: flex;
         align-items: center;
         gap: 8px;
@@ -248,6 +251,13 @@
         color: var(--text-faint);
         opacity: 0.5;
         cursor: grab;
+    }
+
+    :global(.node-group.group-draggable) .group-label {
+        cursor: grab;
+    }
+    :global(.node-group.group-draggable) .group-label:active {
+        cursor: grabbing;
     }
 
     .group-label-edit {
