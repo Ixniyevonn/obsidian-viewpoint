@@ -2,6 +2,7 @@ import type { ProjectData, Spectrum } from "../types";
 import { createUndoManager } from "./undo";
 
 import { MIN_NODE_WIDTH, MAX_NODE_WIDTH } from "../utils/nodeWidth";
+import { spectrumStopRenameMap } from "../utils/spectrum";
 import { tagNameFromMarkdown } from "../utils/tags";
 export { DEFAULT_NODE_WIDTH, MIN_NODE_WIDTH, MAX_NODE_WIDTH } from "../utils/nodeWidth";
 
@@ -217,8 +218,19 @@ export function createProjectStore() {
 
             dim.name = name;
 
+            const oldX = dim["x-spectrum"];
+            const oldY = dim["y-spectrum"];
+
             if (xSpectrum) {
                 dim["x-spectrum"] = xSpectrum;
+                const xRename = spectrumStopRenameMap(oldX?.stops, xSpectrum.stops);
+                const xValid = new Set(xSpectrum.stops);
+                for (const g of dim.groups) {
+                    if (!g.x) continue;
+                    const renamed = xRename.get(g.x);
+                    if (renamed) g.x = renamed;
+                    if (!xValid.has(g.x)) g.x = null;
+                }
             } else {
                 delete dim["x-spectrum"];
                 for (const g of dim.groups) g.x = null;
@@ -226,22 +238,17 @@ export function createProjectStore() {
 
             if (ySpectrum) {
                 dim["y-spectrum"] = ySpectrum;
+                const yRename = spectrumStopRenameMap(oldY?.stops, ySpectrum.stops);
+                const yValid = new Set(ySpectrum.stops);
+                for (const g of dim.groups) {
+                    if (!g.y) continue;
+                    const renamed = yRename.get(g.y);
+                    if (renamed) g.y = renamed;
+                    if (!yValid.has(g.y)) g.y = null;
+                }
             } else {
                 delete dim["y-spectrum"];
                 for (const g of dim.groups) g.y = null;
-            }
-
-            if (xSpectrum) {
-                const validStops = new Set(xSpectrum.stops);
-                for (const g of dim.groups) {
-                    if (g.x && !validStops.has(g.x)) g.x = null;
-                }
-            }
-            if (ySpectrum) {
-                const validStops = new Set(ySpectrum.stops);
-                for (const g of dim.groups) {
-                    if (g.y && !validStops.has(g.y)) g.y = null;
-                }
             }
 
             touch(); notify();
