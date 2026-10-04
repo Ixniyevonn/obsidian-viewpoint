@@ -224,7 +224,13 @@
       const id = generateId("note");
       project.addNote(id, "Untitled");
       if (hitGroup !== "__ungrouped") {
-        project.setNoteMembership(id, ui.activeDimensionId, hitGroup);
+        project.moveNoteToGroup(
+          id,
+          ui.activeDimensionId,
+          hitGroup,
+          findNearestXStop(worldX),
+          findNearestYStop(worldY),
+        );
       }
       ui.selectNode(id, false);
     } else {
