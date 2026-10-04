@@ -342,7 +342,7 @@
   let nodeDropGroupId = $state<string | null>(null);
   let nodeDropXStop = $state<string | null>(null);
   let nodeDropYStop = $state<string | null>(null);
-  const GROUP_DRAG_THRESHOLD = 8;
+  const GROUP_DRAG_THRESHOLD = 5;
 
   function handlePointerMove(e: PointerEvent) {
     if (!canvasRef) return;
@@ -363,8 +363,8 @@
     }
 
     if (groupDragTracking && !draggingGroupId) {
-      const dx = world.x - groupDragStartX;
-      const dy = world.y - groupDragStartY;
+      const dx = e.clientX - groupDragStartX;
+      const dy = e.clientY - groupDragStartY;
       if (dx * dx + dy * dy > GROUP_DRAG_THRESHOLD * GROUP_DRAG_THRESHOLD) {
         draggingGroupId = groupDragTrackingId;
         groupDragTracking = false;
@@ -537,8 +537,8 @@
     };
     groupDragTracking = true;
     groupDragTrackingId = box.groupId;
-    groupDragStartX = world.x;
-    groupDragStartY = world.y;
+    groupDragStartX = e.clientX;
+    groupDragStartY = e.clientY;
     groupDragAnchorXStop = findNearestXStop(world.x);
     groupDragAnchorYStop = findNearestYStop(world.y);
     groupDragMode = e.shiftKey ? "proxy" : "move";
@@ -572,8 +572,8 @@
     groupResizeEdge = edge;
     groupResizeTargetStop =
       axis === "x" ? findNearestXStop(world.x) : findNearestYStop(world.y);
-    groupDragStartX = world.x;
-    groupDragStartY = world.y;
+    groupDragStartX = e.clientX;
+    groupDragStartY = e.clientY;
     selectedBoxKeys = new Set([boxKey(box)]);
   }
 
