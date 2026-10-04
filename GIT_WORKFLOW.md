@@ -70,7 +70,11 @@ A successful push alone does not mean that GitHub published the release.
 
 ### Prepare the next version
 
-Choose an unused stable version above the last published version.
+Use an unused stable version above the last published version.
+Ask the user to choose the version before you run the script.
+Give two to four concrete versions as options.
+Put the recommended option first and label it `Recommended`.
+Do not choose the version for the user.
 Run the preparation script:
 
 ```sh

@@ -175,6 +175,18 @@ Do not use `git add .`, `git add -A`, or a broad path when temporary files exist
 Before each commit, run `git diff --cached --name-only` and examine every staged path.
 Unstage each temporary artifact before you create the commit.
 
+## Choose the release version
+
+Before you prepare a release version, ask the user to choose the version number.
+Do not choose the version for the user.
+
+Give two to four concrete versions as options.
+Put the recommended option first and label it `Recommended`.
+For each option, give the consequence in one short sentence.
+Let the user give a custom answer if the options do not apply.
+
+Read the last published version and the recent commit types before you write the options.
+
 ## Use shared agent skills
 
 Shared skills are in `C:\Sync\Arc\Projects\-skills\`.
