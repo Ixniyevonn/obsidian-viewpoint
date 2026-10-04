@@ -289,6 +289,16 @@
         );
     }
 
+    /**
+     * True when a bundle holds only edges that run nodeB to nodeA.
+     *
+     * The geometry uses the canonical nodeA to nodeB order. Such a bundle
+     * draws its arrow in the reverse direction.
+     */
+    function isReverseOnly(bundle: EdgeBundle): boolean {
+        return !bundle.isSelfLoop && bundle.forwardCount === 0;
+    }
+
     // --- Geometry builders ---
 
     interface EdgeGeometry {
@@ -608,7 +618,8 @@
         dragActive = false;
 
         const t = closestT(bundle, ui.cursorWorldX, ui.cursorWorldY);
-        dragHalf = t < 0.5 ? "source" : "target";
+        const orientedT = isReverseOnly(bundle) ? 1 - t : t;
+        dragHalf = orientedT < 0.5 ? "source" : "target";
 
         window.addEventListener("pointermove", onDragMove);
         window.addEventListener("pointerup", onDragUp);
@@ -743,6 +754,7 @@
         {@const sw = strokeWidth(bundle)}
         {@const labelText = bundleLabelText(bundle)}
         {@const isStrong = bundle.strength > 1}
+        {@const reverseOnly = isReverseOnly(bundle)}
         <g
             class="edge-group"
             class:pending-delete={pendingDel}
@@ -763,9 +775,9 @@
                     startEditing(bundle);
                 }}
             />
-            <!-- Forward arrow line -->
+            <!-- Forward arrow line. A reverse-only bundle draws nodeB to nodeA. -->
             <path
-                d={bundle.path}
+                d={reverseOnly ? reversedPath(bundle) : bundle.path}
                 class="edge-line"
                 class:edge-line-delete={pendingDel}
                 style:stroke-width="{sw}px"
