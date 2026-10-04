@@ -70,9 +70,24 @@
     return target === containerEl;
   }
 
+  /**
+   * Return true when a left drag on the target pans the view.
+   *
+   * The empty canvas pans. A group that cannot move marks its body with
+   * `group-pan`, so a drag there pans too.
+   *
+   * @param target - The event target.
+   * @returns True when the target starts a pan.
+   */
+  function isPanBackground(target: EventTarget | null): boolean {
+    if (isEmptySpace(target)) return true;
+    if (!(target instanceof Element)) return false;
+    return target.closest(".group-pan") !== null;
+  }
+
   function onPointerDown(e: PointerEvent) {
     const isMiddle = e.button === 1;
-    const isLeftOnEmpty = e.button === 0 && isEmptySpace(e.target);
+    const isLeftOnEmpty = e.button === 0 && isPanBackground(e.target);
 
     if (!isMiddle && !isLeftOnEmpty) return;
 

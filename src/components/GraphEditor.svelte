@@ -403,6 +403,8 @@
 
   function handleGroupPointerDown(box: GroupBoxLike, e: PointerEvent) {
     if (e.button !== 0 || !hasSpectra || box.groupId === "__ungrouped") return;
+    // A complex group spans several cells, so a body drag is disabled.
+    if (layout.groups[box.groupId]?.complex) return;
     const world = canvasRef?.clientToWorld(e.clientX, e.clientY) ?? {
       x: ui.cursorWorldX,
       y: ui.cursorWorldY,
@@ -1195,7 +1197,9 @@
           chainDim={ui.hasChainHighlight &&
             !box.memberIds.some((id) => ui.chainNodeIds.has(id))}
           selected={selectedBoxKey === boxKey(box)}
-          draggable={hasSpectra && box.groupId !== "__ungrouped"}
+          draggable={hasSpectra &&
+            box.groupId !== "__ungrouped" &&
+            !(shownLayout.groups[box.groupId]?.complex ?? false)}
           beingDragged={draggingGroupId === box.groupId}
           resizableX={!previewLayout &&
             hasSpectra &&

@@ -115,12 +115,12 @@ Keyboard shortcuts below use Ctrl. The editor also accepts Cmd for selection, co
 | Edit the active dimension | Click the pencil button above the canvas. |
 | Switch dimensions | Click a dimension button, or scroll without Ctrl. |
 | Select the next or previous dimension | Use Tab or Ctrl+Tab. |
-| Move a group box | Drag the box body. |
+| Move a group box | Drag the box body of a simple group. |
 | Resize a group box | Drag an edge knob to the wanted stop. |
-| Place a copy of a group | Hold Shift, then drag the group to another cell. |
+| Place a copy of a group | Hold Shift, then drag a simple group to another cell. |
 | Remove one group box | Select the box, then use Delete or Backspace. |
 | Place a node at a stop | Drag the node to a stop inside a group box. |
-| Pan the canvas | Drag the empty canvas, or drag with the middle mouse button. |
+| Pan the canvas | Drag the empty canvas or a fixed group body, or drag with the middle mouse button. |
 | Zoom | Use Ctrl+scroll. |
 | Undo | Use Ctrl+Z. |
 | Redo | Use Ctrl+Shift+Z or Ctrl+Y. |
@@ -139,7 +139,7 @@ These limits describe the current implementation:
 - The file stores long descriptions, but the editor has no pane to view or edit them.
 - Middle-click marks a node as focused. Shift+middle-click can mark a second node. Focus does not recenter the canvas or calculate paths or opacity.
 - Node dragging changes group membership and the node stop. It does not change the order inside a group.
-- Dragging a group box moves only that box. Use Shift+drag to add a box in another cell.
+- Dragging a group box moves only that box. Use Shift+drag to add a box in another cell. A complex group keeps its cells, so its body does not move the group. A drag on that body pans the view.
 - A box that covers several rows claims its cells. The layout stacks single-row boxes in shared cells.
 - The layout reads `node_order` for named groups. It ignores entries for ungrouped notes.
 - The clipboard belongs to one Viewpoint view. Paste keeps links between the pasted notes and drops links to notes outside the copy.

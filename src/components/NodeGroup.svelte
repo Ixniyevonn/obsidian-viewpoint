@@ -157,6 +157,7 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
         class="group-click-catcher"
+        class:group-pan={!draggable}
         onpointerdown={handleBodyPointerDown}
         onpointermove={handleBodyPointerMove}
         onclick={handleBodyClick}
@@ -178,6 +179,7 @@
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <div
                 class="group-label"
+                class:group-pan={!draggable}
                 onclick={handleLabelClick}
                 ondblclick={startEdit}
                 onpointerdown={handleBodyPointerDown}
@@ -330,6 +332,16 @@
 
     :global(.node-group.group-draggable) .group-click-catcher {
         cursor: grab;
+    }
+
+    /* A group that cannot move lets a drag pan the view. */
+    .group-click-catcher.group-pan,
+    .group-label.group-pan {
+        cursor: grab;
+    }
+    .group-click-catcher.group-pan:active,
+    .group-label.group-pan:active {
+        cursor: grabbing;
     }
 
     /*
