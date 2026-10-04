@@ -91,6 +91,17 @@ test("a detached cell set makes one box for each run", () => {
 	expect(layout.groups.point.complex).toBe(false);
 });
 
+test("each detached box lists only the notes inside its run", () => {
+	const layout = layoutEngine(
+		makeProject([{ id: "span", name: "Span", cells: [cell("a"), cell("c")] }]),
+		"d",
+	);
+	const boxes = layout.groupBoxes.filter((box) => box.groupId === "span");
+	expect(boxes.length).toBe(2);
+	for (const box of boxes) expect(box.memberIds.length).toBe(1);
+	expect(boxes.flatMap((box) => box.memberIds).sort()).toEqual(["n1", "n2"]);
+});
+
 test("detached chunks of one group align on one line", () => {
 	const layout = layoutEngine(
 		makeProject([

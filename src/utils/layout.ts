@@ -100,6 +100,8 @@ export interface GroupBoxLayout {
 	yFrom: number;
 	/** Last stop index of the box on the Y axis. */
 	yTo: number;
+	/** The notes whose effective cell is inside this box. */
+	memberIds: string[];
 }
 
 export interface LayoutResult {
@@ -679,6 +681,7 @@ export function layoutEngine(
 				xTo: 0,
 				yFrom: 0,
 				yTo: 0,
+				memberIds: members,
 			});
 
 			cursorY += gh + groupGap;
@@ -875,6 +878,13 @@ function layoutWithSpectra(
 			);
 		}
 		return LABEL_H + groupPadding * 2 + top;
+	}
+	function runMembers(group: ResolvedGroup, run: GroupRun): string[] {
+		const ids: string[] = [];
+		for (const cell of run.cells) {
+			ids.push(...cellMembers(group, cell.xi, cell.yi));
+		}
+		return ids;
 	}
 
 	/**
@@ -1076,6 +1086,7 @@ function layoutWithSpectra(
 					xTo: run.xTo,
 					yFrom: run.yFrom,
 					yTo: run.yTo,
+					memberIds: runMembers(group, run),
 				};
 				result.groupBoxes.push(box);
 				if (!primary) primary = box;
@@ -1101,6 +1112,7 @@ function layoutWithSpectra(
 					xTo: run.xTo,
 					yFrom: run.yFrom,
 					yTo: run.yTo,
+					memberIds: runMembers(group, run),
 				};
 				result.groupBoxes.push(box);
 				if (!primary) primary = box;
@@ -1163,6 +1175,7 @@ function layoutWithSpectra(
 			xTo: 0,
 			yFrom: 0,
 			yTo: 0,
+			memberIds: group.members,
 		});
 
 		unplacedX += gw + groupGap;

@@ -130,7 +130,7 @@ The dimension switcher shows buttons for the first ten dimensions. Scrolling and
 
 Multiple connections between the same notes share a curve. Each arrow points from the source note to the target note. Opposite connections show arrows in each direction. Deleting the curve removes all connections in that bundle.
 
-A click on a curve highlights every note in its connected cluster. The cluster connections use the accent color. The other notes, groups, and connections dim. Click the curve again, click empty space, or press Esc to clear the highlight.
+A click on a curve highlights every note in its connected cluster. The cluster connections use the accent color. Only the group chunks that hold a connected note stay bright. The other notes, groups, and connections dim. Click the curve again, click empty space, or press Esc to clear the highlight.
 
 ## Current limits
 
