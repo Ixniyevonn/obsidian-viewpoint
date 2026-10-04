@@ -160,11 +160,26 @@ test("an explicit color wins and duplicate names differ", () => {
 				cells: [cell("a"), cell("b")],
 				color: "red",
 			},
+			{
+				id: "soft",
+				name: "Soft",
+				cells: [cell("a"), cell("b")],
+				color: "green-soft",
+			},
+			{
+				id: "custom",
+				name: "Custom",
+				cells: [cell("a"), cell("b")],
+				color: "#123456",
+			},
 		]),
 		"d",
 	);
 	expect(layout.groups.g1.color).toBeDefined();
 	expect(layout.groups.g2.color).toBeDefined();
 	expect(layout.groups.g1.color).not.toBe(layout.groups.g2.color);
-	expect(layout.groups.solo.color).toBe("--color-red");
+	expect(layout.groups.solo.color).toBe("var(--color-red)");
+	expect(layout.groups.soft.color).toContain("var(--color-green)");
+	expect(layout.groups.soft.color).toContain("color-mix(");
+	expect(layout.groups.custom.color).toBe("#123456");
 });

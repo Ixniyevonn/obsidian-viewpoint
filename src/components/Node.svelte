@@ -42,7 +42,7 @@
   style:min-height={`${height}px`}
   style:left={`${x}px`}
   style:top={`${y}px`}
-  style:--group-color={groupColor ? `var(${groupColor})` : undefined}
+  style:--group-color={groupColor ? groupColor : undefined}
   use:flip={{ x, y, width, minHeight: height }}
   {onclick}
   {ondblclick}

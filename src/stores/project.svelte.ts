@@ -588,7 +588,8 @@ export function createProjectStore() {
 		 *
 		 * @param dimensionId - The dimension of the group.
 		 * @param groupId - The group to change.
-		 * @param color - The color key, or null for the automatic name color.
+		 * @param color - The color key or custom CSS color, or null for the
+		 * automatic name color.
 		 * @returns True when the change applies.
 		 */
 		setGroupColor(

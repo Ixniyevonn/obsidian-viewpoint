@@ -19,7 +19,10 @@ export interface Group {
 	name: string;
 	/** The cells where the group is present. An empty list means auto or unplaced. */
 	cells: GroupCell[];
-	/** Optional explicit color key, such as `red`. Omitted for the name color. */
+	/**
+	 * Optional explicit color. A preset key, such as `red` or `red-soft`, or a
+	 * custom CSS color, such as `#3b82f6`. Omitted for the name color.
+	 */
 	color?: string;
 }
 

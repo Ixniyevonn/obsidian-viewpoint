@@ -1,5 +1,5 @@
 import type { ProjectData, Spectrum } from "../types";
-import { colorKeyToVariable, groupColorVariable } from "./color";
+import { colorKeyToCss, groupColorVariable } from "./color";
 import {
 	cellsToIndices,
 	decomposeGroupRuns,
@@ -78,7 +78,7 @@ export interface GroupLayout {
 	name: string;
 	/** True when one axis of the group has more than one stop. */
 	complex: boolean;
-	/** The color variable of a complex group. */
+	/** The CSS color value of a complex group. */
 	color?: string;
 }
 
@@ -90,6 +90,7 @@ export interface GroupBoxLayout {
 	width: number;
 	height: number;
 	name: string;
+	/** The CSS color value of the group. */
 	color?: string;
 	/** First stop index of the box on the X axis. */
 	xFrom: number;
@@ -696,15 +697,15 @@ function layoutWithSpectra(
 	for (const group of resolved) {
 		if (!group.complex) continue;
 		if (group.colorKey) {
-			group.color = colorKeyToVariable(group.colorKey);
+			group.color = colorKeyToCss(group.colorKey);
 			continue;
 		}
 		const key = group.name.trim().toLowerCase();
 		const use = (groupNameUses.get(key) ?? 0) + 1;
 		groupNameUses.set(key, use);
-		group.color = groupColorVariable(
+		group.color = `var(${groupColorVariable(
 			use === 1 ? group.name : `${group.name} ${use}`,
-		);
+		)})`;
 	}
 
 	if (ungrouped.length) {

@@ -182,7 +182,7 @@
                     <button
                         type="button"
                         class="group-color-dot"
-                        style:background-color={`var(${color})`}
+                        style:background-color={color}
                         title="Change group color"
                         aria-label="Change group color"
                         onpointerdown={(e) => e.stopPropagation()}
