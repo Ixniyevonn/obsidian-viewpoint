@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Component, Keymap, MarkdownRenderer, type App } from "obsidian";
+  import { isPlainText } from "../utils/plainText";
 
   interface Props {
     app: App;
@@ -11,21 +12,57 @@
   const { app, markdown, sourcePath = "", parentComponent }: Props = $props();
 
   let el: HTMLDivElement | undefined = $state();
+  let renderedContent: HTMLDivElement | null = null;
+  let renderedComponent: Component | null = null;
+  let renderedKey = "";
 
+  /** Remove the rendered text and its Obsidian component. */
+  function releaseRendered() {
+    if (renderedComponent) parentComponent.removeChild(renderedComponent);
+    renderedContent?.remove();
+    renderedComponent = null;
+    renderedContent = null;
+  }
+
+  /**
+   * Render the Markdown text.
+   *
+   * A parent render can run this effect again with the same text. In that case
+   * the effect skips the render. The Obsidian renderer is slow, and a large
+   * file has many cards.
+   */
   $effect(() => {
     if (!el) return;
     const container = el;
+    const text = markdown;
+    const path = sourcePath;
+    const key = `${path}\u0000${text}`;
+    if (
+      key === renderedKey &&
+      renderedContent &&
+      container.contains(renderedContent)
+    ) {
+      return;
+    }
+    renderedKey = key;
+    releaseRendered();
     const content = document.createElement("div");
     container.replaceChildren(content);
+    renderedContent = content;
+    if (isPlainText(text)) {
+      const paragraph = document.createElement("p");
+      paragraph.textContent = text;
+      content.appendChild(paragraph);
+      return;
+    }
     const component = new Component();
     parentComponent.addChild(component);
-    void MarkdownRenderer.render(app, markdown, content, sourcePath, component)
+    renderedComponent = component;
+    void MarkdownRenderer.render(app, text, content, path, component)
       .catch(error => console.error("Failed to render Viewpoint Markdown", error));
-    return () => {
-      parentComponent.removeChild(component);
-      content.remove();
-    };
   });
+
+  $effect(() => () => releaseRendered());
 
   $effect(() => {
     if (!el) return;
