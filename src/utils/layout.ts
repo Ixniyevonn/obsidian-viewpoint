@@ -391,12 +391,23 @@ export function layoutEngine(
 	const noteIds = Object.keys(project.notes);
 	const widthOf = makeWidthOf(project, fonts);
 
+	/** Cached card height for this pass. */
+	const heightCache = new Map<string, number>();
+
 	/** Use measured DOM height if available, otherwise estimate via pretext */
 	function heightOf(id: string): number {
-		if (measuredHeights[id] !== undefined) return measuredHeights[id];
-		const note = project.notes[id];
-		const nw = widthOf(id);
-		return estimateNodeHeight(note.title, note.short, nw, fonts);
+		const cached = heightCache.get(id);
+		if (cached !== undefined) return cached;
+		let height: number;
+		if (measuredHeights[id] !== undefined) {
+			height = measuredHeights[id];
+		} else {
+			const note = project.notes[id];
+			const nw = widthOf(id);
+			height = estimateNodeHeight(note.title, note.short, nw, fonts);
+		}
+		heightCache.set(id, height);
+		return height;
 	}
 
 	const dim = activeDimensionId ? project.dimensions[activeDimensionId] : null;
@@ -597,11 +608,22 @@ function layoutWithSpectra(
 ): LayoutResult {
 	const result: LayoutResult = { nodes: {}, groups: {}, groupBoxes: [] };
 
+	/** Cached card height for this pass. */
+	const heightCache = new Map<string, number>();
+
 	function heightOf(id: string): number {
-		if (measuredHeights[id] !== undefined) return measuredHeights[id];
-		const note = project.notes[id];
-		const nw = widthOf(id);
-		return estimateNodeHeight(note.title, note.short, nw, fonts);
+		const cached = heightCache.get(id);
+		if (cached !== undefined) return cached;
+		let height: number;
+		if (measuredHeights[id] !== undefined) {
+			height = measuredHeights[id];
+		} else {
+			const note = project.notes[id];
+			const nw = widthOf(id);
+			height = estimateNodeHeight(note.title, note.short, nw, fonts);
+		}
+		heightCache.set(id, height);
+		return height;
 	}
 
 	function placeCellNodes(members: string[], x: number, startY: number): void {

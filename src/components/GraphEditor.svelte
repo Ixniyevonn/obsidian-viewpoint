@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { App, Component, WorkspaceLeaf } from "obsidian";
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import type DimGraphPlugin from "../main";
   import type { ProjectStore } from "../stores/project.svelte";
   import { createUiStore } from "../stores/ui.svelte";
@@ -41,6 +41,14 @@
 
   const { app, plugin, project, parentComponent, leaf }: Props = $props();
 
+  /**
+   * Stable empty lists.
+   *
+   * A new list changes the property identity on each render.
+   */
+  const EMPTY_WIDTHS: number[] = [];
+  const EMPTY_TAGS: string[] = [];
+
   const ui = createUiStore();
   let fonts: FontConfig = $state(DEFAULT_FONTS);
   let canvasAreaEl: HTMLDivElement | undefined = $state();
@@ -50,14 +58,33 @@
 
   // --- Measured DOM heights for accurate layout ---
   let measuredHeights = $state<Record<string, number>>({});
+  const pendingHeights = new Map<string, number>();
+  let measureFrame = 0;
 
+  /**
+   * Store the measured height of a card.
+   *
+   * The function collects the heights and applies them in one animation frame.
+   * One update prevents a full re-render for each card.
+   *
+   * @param id - The note identifier.
+   * @param h - The measured card height in pixels.
+   */
   function handleNodeMeasured(id: string, h: number) {
-    // Only update if changed to avoid infinite reactivity loops
-    if (measuredHeights[id] !== h) {
-      measuredHeights[id] = h;
-
-    }
+    pendingHeights.set(id, h);
+    if (measureFrame) return;
+    measureFrame = requestAnimationFrame(() => {
+      measureFrame = 0;
+      for (const [noteId, height] of pendingHeights) {
+        if (measuredHeights[noteId] !== height) measuredHeights[noteId] = height;
+      }
+      pendingHeights.clear();
+    });
   }
+
+  onDestroy(() => {
+    if (measureFrame) cancelAnimationFrame(measureFrame);
+  });
 
   $effect(() => {
     if (ui.selectedNodeIds.size > 0) selectedBoxKey = null;
@@ -907,6 +934,32 @@
   /** The layout to show: the drag preview while dragging, else the real one. */
   const shownLayout = $derived(previewLayout ?? layout);
 
+  /**
+   * Group the card widths by column and by note.
+   *
+   * The width snap uses the widths of the other cards in the same column. A
+   * precomputed map removes a scan of all cards for each card.
+   */
+  const columnWidthsByNote = $derived.by(() => {
+    const byColumn = new Map<number, { id: string; width: number }[]>();
+    for (const nodeId in shownLayout.nodes) {
+      const node = shownLayout.nodes[nodeId];
+      const column = Math.round(node.x);
+      const list = byColumn.get(column);
+      if (list) list.push({ id: nodeId, width: node.width });
+      else byColumn.set(column, [{ id: nodeId, width: node.width }]);
+    }
+    const result: Record<string, number[]> = {};
+    for (const list of byColumn.values()) {
+      for (const item of list) {
+        result[item.id] = list
+          .filter((other) => other.id !== item.id)
+          .map((other) => other.width);
+      }
+    }
+    return result;
+  });
+
   const groupDragHint = $derived.by(() => {
     if (!draggingGroupId) return null;
     if (groupDragMode === "resize") {
@@ -1040,9 +1093,7 @@
       {#each Object.entries(shownLayout.nodes) as [noteId, pos] (noteId)}
         <NodeCard
           width={pos.width}
-          columnWidths={Object.entries(shownLayout.nodes)
-            .filter(([id, node]) => id !== noteId && Math.abs(node.x - pos.x) < 1)
-            .map(([, node]) => node.width)}
+          columnWidths={columnWidthsByNote[noteId] ?? EMPTY_WIDTHS}
           height={pos.height}
           x={pos.x}
           y={pos.y}
@@ -1052,7 +1103,7 @@
           title={project.project.notes[noteId].title}
           short={project.project.notes[noteId].short}
           long={project.project.notes[noteId].long}
-          tags={project.project.notes[noteId].tags ?? []}
+          tags={project.project.notes[noteId].tags ?? EMPTY_TAGS}
           suggestions={tagSuggestions}
           {parentComponent}
           {ui}

@@ -4,9 +4,26 @@ import GraphEditor from "../components/GraphEditor.svelte";
 import type DimGraphPlugin from "../main";
 
 import { createProjectStore } from "../stores/project.svelte";
+import type { ProjectData } from "../types";
 import { deserializeProject, serializeProject } from "../utils/helpers";
+import { pruneCache } from "../utils/textMeasure";
 
 export const VIEW_TYPE_GRAPH = "dim-graph-view";
+
+/**
+ * Return every text that the layout measures.
+ *
+ * @param project - The loaded project data.
+ * @returns The set of title and short-description texts.
+ */
+function collectMeasuredTexts(project: ProjectData): Set<string> {
+	const texts = new Set<string>();
+	for (const note of Object.values(project.notes)) {
+		if (note.title) texts.add(note.title);
+		if (note.short) texts.add(note.short);
+	}
+	return texts;
+}
 
 export class GraphView extends TextFileView {
 	component: ReturnType<typeof mount> | null = null;
@@ -56,6 +73,7 @@ export class GraphView extends TextFileView {
 		try {
 			const parsed = deserializeProject(data);
 			this.project.load(parsed);
+			pruneCache(collectMeasuredTexts(parsed));
 		} catch (e) {
 			console.error("Failed to parse viewpoint file:", e);
 			this.project.reset();

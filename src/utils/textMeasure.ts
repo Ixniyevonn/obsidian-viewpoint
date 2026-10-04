@@ -12,6 +12,9 @@ const cache = new Map<string, PreparedText>();
 // Cache keyed by "font\0text" → measured single-line width
 const widthCache = new Map<string, number>();
 
+// Cache keyed by "font\0text\0maxWidth\0lineHeight" → wrapped height
+const heightCache = new Map<string, { height: number; lineCount: number }>();
+
 /**
  * Measure the height of text as it would wrap within maxWidth at the given lineHeight.
  * Uses pretext: prepare() does canvas-based measurement once (cached), layout() is pure math.
@@ -24,13 +27,19 @@ export function measureTextHeight(
 ): { height: number; lineCount: number } {
 	if (!text) return { height: 0, lineCount: 0 };
 
+	const resultKey = `${font}\x00${text}\x00${maxWidth}\x00${lineHeight}`;
+	const cached = heightCache.get(resultKey);
+	if (cached) return cached;
+
 	const key = `${font}\x00${text}`;
 	let prepared = cache.get(key);
 	if (!prepared) {
 		prepared = prepare(text, font);
 		cache.set(key, prepared);
 	}
-	return layout(prepared, maxWidth, lineHeight);
+	const result = layout(prepared, maxWidth, lineHeight);
+	heightCache.set(resultKey, result);
+	return result;
 }
 
 /**
@@ -59,6 +68,7 @@ export function measureTextWidth(text: string, font: string): number {
  * Call periodically (e.g. on project load) to prevent unbounded growth.
  */
 export function pruneCache(liveTexts?: Set<string>) {
+	heightCache.clear();
 	if (!liveTexts) {
 		cache.clear();
 		widthCache.clear();
