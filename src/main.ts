@@ -91,7 +91,8 @@ export default class DimGraphPlugin extends Plugin {
 	}
 
 	onunload() {
-		this.app.workspace.detachLeavesOfType(VIEW_TYPE_GRAPH);
+		// Do not detach leaves here. Obsidian reinitializes open leaves in
+		// place on a plugin update, which reloads their file content.
 	}
 
 	async activateView() {
