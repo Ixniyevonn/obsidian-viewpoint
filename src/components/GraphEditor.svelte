@@ -4,7 +4,7 @@
   import type DimGraphPlugin from "../main";
   import type { ProjectStore } from "../stores/project.svelte";
   import { createUiStore } from "../stores/ui.svelte";
-  import type { Dimension, GroupCell, Note, ProjectData, Spectrum } from "../types";
+  import type { ClipboardNote, Dimension, GroupCell, Note, ProjectData, Spectrum } from "../types";
   import { generateId } from "../utils/helpers";
   import {
     addCellIndex,
@@ -579,6 +579,37 @@
       : null,
   );
 
+  // --- Clipboard ---
+
+  /**
+   * Copy the data of the given notes for the clipboard.
+   *
+   * @param ids - The note IDs to copy.
+   * @returns A clipboard entry for each known note.
+   */
+  function snapshotNotes(ids: string[]): ClipboardNote[] {
+    const entries: ClipboardNote[] = [];
+    for (const id of ids) {
+      const note = project.project.notes[id];
+      if (!note) continue;
+      entries.push({
+        id,
+        title: note.title,
+        short: note.short,
+        long: note.long,
+        width: note.width,
+        tags: note.tags ? [...note.tags] : undefined,
+        connections: Object.fromEntries(
+          Object.entries(note.connections ?? {}).map(([dimId, list]) => [
+            dimId,
+            list.map((conn) => ({ to: conn.to, label: conn.label })),
+          ]),
+        ),
+      });
+    }
+    return entries;
+  }
+
   // --- Keyboard shortcuts ---
 
   /**
@@ -686,7 +717,7 @@
 
     if (e.key === "c" && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
       if (ui.selectedNodeIds.size > 0) {
-        ui.copyNodes([...ui.selectedNodeIds]);
+        ui.copyNodes(snapshotNotes([...ui.selectedNodeIds]));
       }
       return;
     }
@@ -695,12 +726,31 @@
       if (ui.selectedNodeIds.size > 0) {
         e.preventDefault();
         const ids = [...ui.selectedNodeIds];
-        ui.cutNodes(ids);
+        ui.cutNodes(snapshotNotes(ids));
         for (const id of ids) {
           project.removeNote(id);
         }
         ui.clearSelection();
       }
+      return;
+    }
+
+    if (e.key === "v" && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+      if (ui.clipboardNotes.length === 0) return;
+      e.preventDefault();
+      const dimId = ui.activeDimensionId;
+      const groupId = dimId
+        ? namedGroupAtPoint(ui.cursorWorldX, ui.cursorWorldY)
+        : null;
+      const newIds = project.pasteNotes(
+        ui.clipboardNotes,
+        dimId,
+        groupId,
+        findNearestXStop(ui.cursorWorldX),
+        findNearestYStop(ui.cursorWorldY),
+      );
+      ui.clearSelection();
+      for (const id of newIds) ui.selectNode(id, true);
       return;
     }
 

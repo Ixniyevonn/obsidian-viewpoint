@@ -1,5 +1,7 @@
 // src/stores/ui.svelte.ts
 
+import type { ClipboardNote } from "../types";
+
 export type RetargetEnd = "source" | "target";
 
 export function createUiStore() {
@@ -38,7 +40,7 @@ export function createUiStore() {
     let editingLongId = $state<string | null>(null);
 
     // Clipboard
-    let clipboardNodeIds = $state<string[]>([]);
+    let clipboardNotes = $state<ClipboardNote[]>([]);
     let clipboardIsCut = $state(false);
 
     // Node dragging
@@ -234,21 +236,21 @@ export function createUiStore() {
         set editingLongId(id: string | null) { editingLongId = id; },
 
         // --- Clipboard ---
-        get clipboardNodeIds() { return clipboardNodeIds; },
+        get clipboardNotes() { return clipboardNotes; },
         get clipboardIsCut() { return clipboardIsCut; },
 
-        copyNodes(ids: string[]) {
-            clipboardNodeIds = [...ids];
+        copyNodes(notes: ClipboardNote[]) {
+            clipboardNotes = notes;
             clipboardIsCut = false;
         },
 
-        cutNodes(ids: string[]) {
-            clipboardNodeIds = [...ids];
+        cutNodes(notes: ClipboardNote[]) {
+            clipboardNotes = notes;
             clipboardIsCut = true;
         },
 
         clearClipboard() {
-            clipboardNodeIds = [];
+            clipboardNotes = [];
             clipboardIsCut = false;
         },
 

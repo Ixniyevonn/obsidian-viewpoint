@@ -53,6 +53,19 @@ export interface Note {
     placement?: Record<string, Placement>;
 }
 
+/** One note copy that the clipboard holds. */
+export interface ClipboardNote {
+    /** The source note ID. Paste uses it to remap links between the pasted notes. */
+    id: string;
+    title: string;
+    short: string;
+    long: string;
+    width?: number;
+    tags?: string[];
+    /** The connections of the source note, keyed by dimension ID. */
+    connections: Record<string, { to: string; label: string | null }[]>;
+}
+
 export interface Connection {
     from: string;
     to: string;

@@ -1,4 +1,4 @@
-import type { GroupCell, ProjectData, Spectrum } from "../types";
+import type { ClipboardNote, GroupCell, Note, ProjectData, Spectrum } from "../types";
 import { createUndoManager } from "./undo";
 
 import { MIN_NODE_WIDTH, MAX_NODE_WIDTH } from "../utils/nodeWidth";
@@ -19,6 +19,7 @@ import {
 } from "../utils/groupStops";
 import { spectrumStopRenameMap } from "../utils/spectrum";
 import { tagNameFromMarkdown } from "../utils/tags";
+import { generateId } from "../utils/helpers";
 export {
     DEFAULT_NODE_WIDTH,
     MIN_NODE_WIDTH,
@@ -212,6 +213,93 @@ export function createProjectStore() {
             };
             touch();
             notify();
+        },
+
+        /**
+         * Add copies of clipboard notes as new notes.
+         *
+         * The function keeps links between the copied notes and drops links to
+         * notes outside the copy. It places every copy at one group cell.
+         *
+         * @param entries - The note copies from the clipboard.
+         * @param dimensionId - The dimension for the placement, or null.
+         * @param groupId - The target group, or null for ungrouped.
+         * @param xStop - The wanted X stop, or null.
+         * @param yStop - The wanted Y stop, or null.
+         * @returns The new note IDs.
+         */
+        pasteNotes(
+            entries: ClipboardNote[],
+            dimensionId: string | null,
+            groupId: string | null,
+            xStop: string | null,
+            yStop: string | null,
+        ): string[] {
+            if (entries.length === 0) return [];
+            snap();
+
+            const idMap = new Map<string, string>();
+            const newIds: string[] = [];
+            for (const entry of entries) {
+                let newId = generateId("note");
+                while (project.notes[newId]) newId = generateId("note");
+                idMap.set(entry.id, newId);
+                newIds.push(newId);
+            }
+
+            const dim = dimensionId ? project.dimensions[dimensionId] : null;
+            const group = groupId
+                ? dim?.groups.find((g) => g.id === groupId)
+                : undefined;
+            const xStops = dim?.["x-spectrum"]?.stops ?? null;
+            const yStops = dim?.["y-spectrum"]?.stops ?? null;
+
+            for (const entry of entries) {
+                const newId = idMap.get(entry.id);
+                if (!newId) continue;
+                const note: Note = {
+                    title: entry.title,
+                    short: entry.short,
+                    long: entry.long,
+                    membership: {},
+                    connections: {},
+                };
+                if (entry.width !== undefined) note.width = entry.width;
+                if (entry.tags?.length) note.tags = [...entry.tags];
+
+                for (const [sourceDimId, list] of Object.entries(
+                    entry.connections,
+                )) {
+                    const kept = list
+                        .map((conn) => ({
+                            to: idMap.get(conn.to) ?? "",
+                            label: conn.label,
+                        }))
+                        .filter((conn) => conn.to);
+                    if (kept.length) note.connections[sourceDimId] = kept;
+                }
+
+                if (dimensionId && dim) {
+                    note.membership[dimensionId] = group ? group.id : null;
+                    if (group) {
+                        placeNoteInGroup(
+                            note,
+                            dimensionId,
+                            group.cells,
+                            xStop,
+                            yStop,
+                            xStops,
+                            yStops,
+                        );
+                    }
+                }
+
+                project.notes[newId] = note;
+            }
+
+            touch();
+            notify();
+            return newIds;
         },
 
         removeNote(id: string) {

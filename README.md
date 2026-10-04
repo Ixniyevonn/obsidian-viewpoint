@@ -76,7 +76,7 @@ To try a populated project, copy [example.viewpoint](example.viewpoint) and [Dem
 
 ## Controls
 
-Keyboard shortcuts below use Ctrl. The editor also accepts Cmd for selection, group creation, and undo or redo.
+Keyboard shortcuts below use Ctrl. The editor also accepts Cmd for selection, copy, cut, paste, group creation, and undo or redo.
 
 | Action | Control |
 | --- | --- |
@@ -96,6 +96,9 @@ Keyboard shortcuts below use Ctrl. The editor also accepts Cmd for selection, gr
 | Move a node to a group | Drag the node into that group. |
 | Remove a node from its group | Drag the node outside the named groups. |
 | Delete selected nodes or groups | Use Delete or Backspace. Group deletion leaves its notes ungrouped. |
+| Copy selected nodes | Use Ctrl+C. |
+| Cut selected nodes | Use Ctrl+X. |
+| Paste notes | Use Ctrl+V. The copies go in the group and cell under the pointer. |
 | Start a connection | Right-click the source node. |
 | Finish a connection | Click the target node. |
 | Edit a connection label | Double-click the curve or its label. |
@@ -130,7 +133,7 @@ These limits describe the current implementation:
 - Dragging a group box moves only that box. Use Shift+drag to add a box in another cell.
 - A box that covers several rows claims its cells. The layout stacks single-row boxes in shared cells.
 - The layout reads `node_order` for named groups. It ignores entries for ungrouped notes.
-- Copy and cut controls store note identifiers, but paste is absent. Cut removes the selected notes.
+- The clipboard belongs to one Viewpoint view. Paste keeps links between the pasted notes and drops links to notes outside the copy.
 - The editor has no search overlay, minimap, group outline, or lasso selection.
 - Connection label edits affect the first matching connection in one direction. Endpoint changes can replace multiple matching connections with one connection.
 - Tags belong to the note. Every dimension shows the same tags. The editor cannot rename a tag or change its color.
