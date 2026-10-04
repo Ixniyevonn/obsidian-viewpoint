@@ -4,14 +4,16 @@
     import type { ProjectStore } from "../stores/project.svelte";
     import type { UiStore } from "../stores/ui.svelte";
     import type { LayoutResult, NodeLayout } from "../utils/layout";
+    import type { ViewRect } from "../utils/viewport";
 
     interface Props {
         project: ProjectStore;
         ui: UiStore;
         layout: LayoutResult;
+        viewRect?: ViewRect | null;
     }
 
-    const { project, ui, layout }: Props = $props();
+    const { project, ui, layout, viewRect = null }: Props = $props();
 
     // --- Label editing state ---
     let editingBundleKey = $state<string | null>(null);
@@ -208,6 +210,48 @@
         }
 
         return result;
+    });
+
+    /** The bundles that touch the viewport, or all bundles before the size. */
+    const visibleBundles = $derived.by(() => {
+        const rect = viewRect;
+        if (!rect) return bundles;
+        return bundles.filter((bundle) => {
+            const minX = Math.min(
+                bundle.x1,
+                bundle.x2,
+                bundle.cp1x,
+                bundle.cp2x,
+                bundle.labelX,
+            );
+            const maxX = Math.max(
+                bundle.x1,
+                bundle.x2,
+                bundle.cp1x,
+                bundle.cp2x,
+                bundle.labelX,
+            );
+            const minY = Math.min(
+                bundle.y1,
+                bundle.y2,
+                bundle.cp1y,
+                bundle.cp2y,
+                bundle.labelY,
+            );
+            const maxY = Math.max(
+                bundle.y1,
+                bundle.y2,
+                bundle.cp1y,
+                bundle.cp2y,
+                bundle.labelY,
+            );
+            return (
+                maxX >= rect.x0 &&
+                minX <= rect.x1 &&
+                maxY >= rect.y0 &&
+                minY <= rect.y1
+            );
+        });
     });
 
     // --- Ghost line ---
@@ -685,7 +729,7 @@
         </marker>
     </defs>
 
-    {#each bundles as bundle (bundle.key)}
+    {#each visibleBundles as bundle (bundle.key)}
         {@const pendingDel = isBundlePendingDelete(bundle)}
         {@const retargeting = isBundleBeingRetargeted(bundle)}
         {@const sw = strokeWidth(bundle)}

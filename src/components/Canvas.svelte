@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { Viewport } from "../utils/viewport";
+
   interface Props {
     children?: any;
     minZoom?: number;
@@ -6,6 +8,8 @@
     zoomSpeed?: number;
     onEmptyDblClick?: (worldX: number, worldY: number) => void;
     onEmptyClick?: () => void;
+    /** Report the pan, zoom, and size after a change. */
+    onViewport?: (viewport: Viewport) => void;
   }
   const {
     children,
@@ -14,12 +18,32 @@
     zoomSpeed = 0.002,
     onEmptyDblClick,
     onEmptyClick,
+    onViewport,
   }: Props = $props();
 
   let containerEl: HTMLDivElement | undefined = $state();
   let panX = $state(0);
   let panY = $state(0);
   let zoom = $state(1);
+  let width = $state(0);
+  let height = $state(0);
+
+  $effect(() => {
+    if (!containerEl) return;
+    const element = containerEl;
+    const observer = new ResizeObserver(() => {
+      width = element.clientWidth;
+      height = element.clientHeight;
+    });
+    observer.observe(element);
+    width = element.clientWidth;
+    height = element.clientHeight;
+    return () => observer.disconnect();
+  });
+
+  $effect(() => {
+    onViewport?.({ panX, panY, zoom, width, height });
+  });
 
   // Pan state
   let isPanning = false;

@@ -55,6 +55,8 @@ The canvas combines HTML cards with SVG connections. Short descriptions support 
 
 Drag the right edge for a persistent manual width (120-600 pixels). The title wraps when the manual width is too small. Nearby widths of notes in the same column snap within 8 screen pixels. Double-click the edge to restore automatic sizing.
 
+A far zoom shows a compact card: a clear title and placeholder lines in place of the text and tags. The canvas also renders only the cards and connections near the view. These two changes keep a large file responsive.
+
 Cards can show colored tags below the description. Each tag is Markdown, so a tag can link to another document. The color comes from the visible name of the tag. The same name always has the same color. To add a tag, click the plus button on the card and type a name. The editor suggests the names of existing tags. An empty name adds no tag. To remove a tag, click the remove button on the tag.
 
 ## Obsidian links

@@ -29,6 +29,8 @@
     ui: UiStore;
     project: ProjectStore;
     preview?: boolean;
+    /** "compact" shows the title and a placeholder for the text. */
+    detail?: "full" | "compact";
     onMeasured?: (id: string, height: number) => void;
   }
 
@@ -49,8 +51,11 @@
     ui,
     project,
     preview = false,
+    detail = "full",
     onMeasured,
   }: Props = $props();
+
+  const compact = $derived(detail === "compact");
 
   const isSelected = $derived(ui.isSelected(noteId));
   const isFocused = $derived(
@@ -90,7 +95,7 @@
 
   /** After every render that could change content height, report actual DOM height */
   $effect(() => {
-    if (!cardEl || !onMeasured) return;
+    if (!cardEl || !onMeasured || compact) return;
     const element = cardEl;
     const report = () => {
       // Hover growth must not change the layout. Only measure the base card.
@@ -419,7 +424,9 @@
   {height}
   {x}
   {y}
-  cssClass="node-card{isSelected ? ' selected' : ''}{isFocused
+  cssClass="node-card{compact ? ' compact' : ''}{isSelected
+    ? ' selected'
+    : ''}{isFocused
     ? ' focused'
     : ''}{isConnectingSource ? ' connecting-source' : ''}{isConnectingMode &&
   !isConnectingSource
@@ -474,7 +481,13 @@
       {/if}
     </div>
 
-    {#if short || isEditingShort}
+    {#if compact && !preview}
+      <div class="node-body node-skeleton" aria-hidden="true">
+        <div class="skeleton-line" style="width: 100%"></div>
+        <div class="skeleton-line" style="width: 86%"></div>
+        <div class="skeleton-line" style="width: 62%"></div>
+      </div>
+    {:else if short || isEditingShort}
       <div class="node-body">
         {#if isEditingShort}
           <textarea
@@ -508,31 +521,41 @@
       </div>
     {/if}
 
-    <div
-      class="tag-row"
-      class:expanded={tagExpanded}
-      class:revealed={tagExpanded && !tagTransitioning}
-      class:editing={tagEditing}
-      ontransitionstart={(e) => {
-        if (e.target === e.currentTarget) tagTransitioning = true;
-      }}
-      ontransitionend={(e) => {
-        if (e.target === e.currentTarget) tagTransitioning = false;
-      }}
-    >
-      <div class="tag-row-inner">
-        <TagList
-          {tags}
-          {suggestions}
-          {app}
-          sourcePath={project.sourcePath}
-          {parentComponent}
-          onAdd={(tag) => project.addNoteTag(noteId, tag)}
-          onRemove={(index) => project.removeNoteTag(noteId, index)}
-          onEditingChange={(value) => (tagEditing = value)}
-        />
+    {#if compact && !preview}
+      <div class="tag-row expanded revealed" aria-hidden="true">
+        <div class="tag-row-inner tag-skeleton">
+          <span class="skeleton-chip" style="width: 46px"></span>
+          <span class="skeleton-chip" style="width: 32px"></span>
+          <span class="skeleton-chip" style="width: 40px"></span>
+        </div>
       </div>
-    </div>
+    {:else}
+      <div
+        class="tag-row"
+        class:expanded={tagExpanded}
+        class:revealed={tagExpanded && !tagTransitioning}
+        class:editing={tagEditing}
+        ontransitionstart={(e) => {
+          if (e.target === e.currentTarget) tagTransitioning = true;
+        }}
+        ontransitionend={(e) => {
+          if (e.target === e.currentTarget) tagTransitioning = false;
+        }}
+      >
+        <div class="tag-row-inner">
+          <TagList
+            {tags}
+            {suggestions}
+            {app}
+            sourcePath={project.sourcePath}
+            {parentComponent}
+            onAdd={(tag) => project.addNoteTag(noteId, tag)}
+            onRemove={(index) => project.removeNoteTag(noteId, index)}
+            onEditingChange={(value) => (tagEditing = value)}
+          />
+        </div>
+      </div>
+    {/if}
   </div>
 
   <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -579,6 +602,46 @@
     display: flex;
     flex-direction: column;
     overflow-wrap: anywhere;
+  }
+
+  /* Compact detail: a clear title and a placeholder for the text. */
+  :global(.node-card.compact) {
+    overflow: hidden;
+  }
+
+  :global(.node-card.compact) .resize-handle {
+    display: none;
+  }
+
+  :global(.node-card.compact) .node-title h2 {
+    font-size: 1.45em;
+    font-weight: 800;
+    color: var(--text-normal);
+    transform-origin: top left;
+    transform: scale(min(1.8, calc(0.85 + 0.3 / var(--zoom, 1))));
+  }
+
+  .node-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .skeleton-line {
+    height: 9px;
+    border-radius: 4px;
+    background-color: var(--background-modifier-border);
+  }
+
+  .tag-skeleton {
+    display: flex;
+    gap: 4px;
+  }
+
+  .skeleton-chip {
+    height: 14px;
+    border-radius: var(--radius-s);
+    background-color: var(--background-modifier-border);
   }
 
   .node-body {

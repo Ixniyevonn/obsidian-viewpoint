@@ -20,6 +20,11 @@
   } from "../utils/groupStops";
   import { layoutEngine } from "../utils/layout";
   import { collectTagSuggestions } from "../utils/tags";
+  import {
+    rectsIntersect,
+    viewportRect,
+    type Viewport,
+  } from "../utils/viewport";
   import type { FontConfig } from "../utils/textMeasure";
   import { DEFAULT_FONTS, detectFonts } from "../utils/textMeasure";
   import AxisSwitcher from "./AxisSwitcher.svelte";
@@ -53,6 +58,40 @@
   let fonts: FontConfig = $state(DEFAULT_FONTS);
   let canvasAreaEl: HTMLDivElement | undefined = $state();
   let canvasRef: Canvas | undefined = $state();
+
+  /** The zoom value at which cards switch to the compact detail. */
+  const COMPACT_ZOOM = 0.55;
+
+  // The window size is an initial guess. Canvas reports the true size on mount.
+  let viewport = $state<Viewport>({
+    panX: 0,
+    panY: 0,
+    zoom: 1,
+    width: typeof window === "undefined" ? 0 : window.innerWidth,
+    height: typeof window === "undefined" ? 0 : window.innerHeight,
+  });
+
+  /**
+   * Store the canvas view after a pan, zoom, or resize.
+   *
+   * The function ignores a report with the same values. Each report makes an
+   * object, and a new object causes an extra render.
+   *
+   * @param next - The new canvas view.
+   */
+  function handleViewport(next: Viewport) {
+    const current = viewport;
+    if (
+      current.panX === next.panX &&
+      current.panY === next.panY &&
+      current.zoom === next.zoom &&
+      current.width === next.width &&
+      current.height === next.height
+    ) {
+      return;
+    }
+    viewport = next;
+  }
 
   let dialogMode = $state<"create" | "edit" | null>(null);
 
@@ -934,6 +973,36 @@
   /** The layout to show: the drag preview while dragging, else the real one. */
   const shownLayout = $derived(previewLayout ?? layout);
 
+  /** The world rectangle that the viewport shows, or null before the size. */
+  const viewRect = $derived(viewportRect(viewport, 0.5));
+
+  /**
+   * True when a card shows only its title and a placeholder.
+   *
+   * The compact detail keeps a far view cheap. It also applies before the
+   * first viewport report, so the file opens fast.
+   */
+  const compact = $derived(!viewRect || viewport.zoom < COMPACT_ZOOM);
+
+  /** The cards that touch the viewport, or all cards before the size. */
+  const visibleNodes = $derived.by(() => {
+    const entries = Object.entries(shownLayout.nodes);
+    const rect = viewRect;
+    if (!rect) return entries;
+    return entries.filter(([, node]) =>
+      rectsIntersect(rect, node.x, node.y, node.width, node.height),
+    );
+  });
+
+  /** The group boxes that touch the viewport, or all boxes before the size. */
+  const visibleGroupBoxes = $derived.by(() => {
+    const rect = viewRect;
+    if (!rect) return shownLayout.groupBoxes;
+    return shownLayout.groupBoxes.filter((box) =>
+      rectsIntersect(rect, box.x, box.y, box.width, box.height),
+    );
+  });
+
   /**
    * Group the card widths by column and by note.
    *
@@ -1046,6 +1115,7 @@
       bind:this={canvasRef}
       onEmptyDblClick={handleEmptyDblClick}
       onEmptyClick={handleEmptyClick}
+      onViewport={handleViewport}
     >
       <SpectrumOverlay
         xSpectrum={layout.xSpectrum}
@@ -1053,7 +1123,7 @@
         dimmed={ui.isDraggingNode}
       />
 
-      {#each shownLayout.groupBoxes as box (box.groupId + ":" + box.xFrom + ":" + box.yFrom)}
+      {#each visibleGroupBoxes as box (box.groupId + ":" + box.xFrom + ":" + box.yFrom)}
         <NodeGroup
           x={box.x}
           y={box.y}
@@ -1088,9 +1158,9 @@
         />
       {/each}
 
-      <SVGLayer {project} {ui} layout={shownLayout} />
+      <SVGLayer {project} {ui} layout={shownLayout} {viewRect} />
 
-      {#each Object.entries(shownLayout.nodes) as [noteId, pos] (noteId)}
+      {#each visibleNodes as [noteId, pos] (noteId)}
         <NodeCard
           width={pos.width}
           columnWidths={columnWidthsByNote[noteId] ?? EMPTY_WIDTHS}
@@ -1098,6 +1168,7 @@
           x={pos.x}
           y={pos.y}
           preview={!!previewLayout}
+          detail={compact ? "compact" : "full"}
           {app}
           {noteId}
           title={project.project.notes[noteId].title}
