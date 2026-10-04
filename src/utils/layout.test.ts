@@ -102,19 +102,6 @@ test("each detached box lists only the notes inside its run", () => {
 	expect(boxes.flatMap((box) => box.memberIds).sort()).toEqual(["n1", "n2"]);
 });
 
-test("detached chunks of one group align on one line", () => {
-	const layout = layoutEngine(
-		makeProject([
-			{ id: "point", name: "Point", cells: [cell("a")] },
-			{ id: "span", name: "Span", cells: [cell("a"), cell("c")] },
-		]),
-		"d",
-	);
-	const spanBoxes = layout.groupBoxes.filter((box) => box.groupId === "span");
-	expect(spanBoxes.length).toBe(2);
-	expect(spanBoxes[0].y).toBe(spanBoxes[1].y);
-});
-
 test("connected groups order by their neighbors in the left column", () => {
 	const columns = new Map<number, string[]>([
 		[0, ["b", "a"]],

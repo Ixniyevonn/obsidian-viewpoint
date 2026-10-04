@@ -45,7 +45,7 @@ A dimension can define an X-spectrum, a Y-spectrum, or the two spectra together.
 
 A group is present in one or more cells. Each cell pairs a stop on the X-spectrum with a stop on the Y-spectrum. Cells that touch merge into one box. A group present in more than one cell gets a color from its name. The same name gives the same color. A duplicate name in one dimension gets its own color.
 
-Detached chunks of one complex group stay on one line.
+Detached chunks of one complex group share one line when the space allows.
 
 To choose a color, click the colored dot on the group. The popover shows 16 theme colors: each hue has a normal tone and a soft tone. Choose **Automatic** to use the name color. Choose **Custom color** to select your own color.
 

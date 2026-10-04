@@ -317,51 +317,6 @@ function computeGroupPlacements(
 }
 
 /**
- * Return a stable order that keeps connected groups next to each other.
- *
- * The function walks the group graph from the group with the most
- * connections. Groups without a connection keep their input order.
- *
- * @param allGroupIds - Every group in the dimension, in input order.
- * @param adj - The group adjacency map.
- * @returns The group IDs in visiting order.
- */
-function orderGroupsByConnections(
-	allGroupIds: string[],
-	adj: Map<string, Set<string>>,
-): string[] {
-	if (!allGroupIds.length) return [];
-
-	let root = allGroupIds[0];
-	let maxDegree = -1;
-	for (const id of allGroupIds) {
-		const degree = adj.get(id)?.size ?? 0;
-		if (degree > maxDegree) {
-			maxDegree = degree;
-			root = id;
-		}
-	}
-
-	const ordered: string[] = [];
-	const seen = new Set<string>();
-	const queue = [root];
-	while (queue.length) {
-		const id = queue.shift();
-		if (id === undefined) break;
-		if (seen.has(id)) continue;
-		seen.add(id);
-		ordered.push(id);
-		for (const neighbor of adj.get(id) ?? []) {
-			if (!seen.has(neighbor)) queue.push(neighbor);
-		}
-	}
-	for (const id of allGroupIds) {
-		if (!seen.has(id)) ordered.push(id);
-	}
-	return ordered;
-}
-
-/**
  * Order the groups in each column by their connected groups.
  *
  * The function walks the columns from left to right. A column sorts its
@@ -823,25 +778,6 @@ function layoutWithSpectra(
 		});
 	}
 
-	// Process connected groups one after another, so their boxes stack next to
-	// each other. The stable order keeps disconnected groups as they are.
-	const resolvedIds = resolved.map((group) => group.id);
-	const groupAdjacency = buildGroupAdjacency(
-		getConnectionsForDimension(project, dimId),
-		project.notes,
-		dimId,
-		new Set(resolvedIds),
-	);
-	const groupOrder = new Map(
-		orderGroupsByConnections(resolvedIds, groupAdjacency).map((id, index) => [
-			id,
-			index,
-		]),
-	);
-	resolved.sort(
-		(a, b) => (groupOrder.get(a.id) ?? 0) - (groupOrder.get(b.id) ?? 0),
-	);
-
 	// Vertical packing. A single-row box takes the lowest free span in its
 	// columns. A multi-row box claims its cells and stays exclusive.
 	const blockedCells = new Set<string>();
@@ -888,45 +824,35 @@ function layoutWithSpectra(
 	}
 
 	/**
-	 * Return the lowest offset where every run fits in a row.
+	 * Return the lowest offset where one box fits in a row.
 	 *
-	 * Runs of one group never overlap in columns. The function gives them one
-	 * offset, so the box chunks of a complex group start on the same line.
+	 * The function looks only at the columns that the box covers. Each placed
+	 * box keeps its span plus one group gap, so the new box cannot touch it.
 	 *
 	 * @param row - The row index.
-	 * @param runs - The horizontal runs of one group in this row.
-	 * @param group - The group that owns the runs.
-	 * @returns The lowest shared free offset from the row top.
+	 * @param xFrom - The first column of the new box.
+	 * @param xTo - The last column of the new box.
+	 * @param height - The height of the new box.
+	 * @returns The lowest free offset from the row top.
 	 */
-	function offsetFreeForRuns(
+	function offsetFreeLowest(
 		row: number,
-		runs: GroupRun[],
-		group: ResolvedGroup,
+		xFrom: number,
+		xTo: number,
+		height: number,
 	): number {
 		const boxes = rowBoxes.get(row);
 		if (!boxes || boxes.length === 0) return 0;
-
-		const candidates = new Set<number>([0]);
-		for (const box of boxes) {
-			if (runs.some((run) => box.xTo >= run.xFrom && box.xFrom <= run.xTo)) {
-				candidates.add(box.bottom + groupGap);
-			}
+		const barriers = boxes
+			.filter((box) => box.xTo >= xFrom && box.xFrom <= xTo)
+			.sort((a, b) => a.top - b.top);
+		let offset = 0;
+		for (const box of barriers) {
+			if (offset + height <= box.top) break;
+			const end = box.bottom + groupGap;
+			if (end > offset) offset = end;
 		}
-		const sorted = [...candidates].sort((a, b) => a - b);
-		for (const offset of sorted) {
-			const fits = runs.every((run) => {
-				const height = runContentHeight(group, run);
-				return !boxes.some(
-					(box) =>
-						box.xTo >= run.xFrom &&
-						box.xFrom <= run.xTo &&
-						offset < box.bottom + groupGap &&
-						offset + height > box.top,
-				);
-			});
-			if (fits) return offset;
-		}
-		return sorted[sorted.length - 1];
+		return offset;
 	}
 
 	/** Return true when a placed box covers one cell. */
@@ -942,7 +868,6 @@ function layoutWithSpectra(
 		const addedRuns: string[] = [];
 		const addedBoxes: PlacedBox[] = [];
 		let conflict = false;
-		const horizontalByRow = new Map<number, GroupRun[]>();
 
 		for (const run of group.runs) {
 			if (run.yFrom === run.yTo) {
@@ -953,9 +878,18 @@ function layoutWithSpectra(
 					}
 				}
 				if (conflict) break;
-				const list = horizontalByRow.get(run.yFrom) ?? [];
-				list.push(run);
-				horizontalByRow.set(run.yFrom, list);
+				const height = runContentHeight(group, run);
+				const offset = offsetFreeLowest(run.yFrom, run.xFrom, run.xTo, height);
+				const key = runKey(group, run);
+				runOffset.set(key, offset);
+				addedRuns.push(key);
+				addedBoxes.push({
+					row: run.yFrom,
+					xFrom: run.xFrom,
+					xTo: run.xTo,
+					top: offset,
+					bottom: offset + height,
+				});
 			} else {
 				for (const cell of run.cells) {
 					const key = indexCellKey(cell.yi, cell.xi);
@@ -978,22 +912,6 @@ function layoutWithSpectra(
 			for (const key of addedBlocked) blockedCells.delete(key);
 			for (const key of addedRuns) runOffset.delete(key);
 			continue;
-		}
-
-		for (const [row, runs] of horizontalByRow) {
-			const offset = offsetFreeForRuns(row, runs, group);
-			for (const run of runs) {
-				const key = runKey(group, run);
-				runOffset.set(key, offset);
-				addedRuns.push(key);
-				addedBoxes.push({
-					row,
-					xFrom: run.xFrom,
-					xTo: run.xTo,
-					top: offset,
-					bottom: offset + runContentHeight(group, run),
-				});
-			}
 		}
 
 		for (const box of addedBoxes) {
