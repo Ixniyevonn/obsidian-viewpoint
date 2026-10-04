@@ -1,7 +1,7 @@
 {
 	"name": "obsidian-viewpoint",
 	"private": true,
-	"version": "1.4.1",
+	"version": "1.4.2",
 	"main": "main.js",
 	"type": "module",
 	"scripts": {
