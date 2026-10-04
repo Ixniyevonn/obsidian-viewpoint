@@ -16,21 +16,7 @@
   const dimIds = $derived(Object.keys(project.project.dimensions));
   const dims = $derived(project.project.dimensions);
   const visibleIds = $derived(dimIds.slice(0, MAX_VISIBLE_DIMS));
-
-  function onKeydown(e: KeyboardEvent) {
-    if (e.key === "Tab" && !e.altKey && !e.shiftKey) {
-      if (e.ctrlKey) {
-        e.preventDefault();
-        ui.cycle(dimIds, -1);
-      } else {
-        e.preventDefault();
-        ui.cycle(dimIds, 1);
-      }
-    }
-  }
 </script>
-
-<svelte:window on:keydown={onKeydown} />
 
 <div class="axis-switcher">
   {#each visibleIds as id (id)}

@@ -83,6 +83,7 @@ export class GraphView extends TextFileView {
                 plugin: this.plugin,
                 project: this.project,
                 parentComponent: this,
+                leaf: this.leaf,
             },
         });
 

@@ -669,6 +669,7 @@
   }
 
   .node-title {
+    position: relative;
     display: flex;
     align-items: flex-start;
     gap: 6px;
@@ -682,13 +683,16 @@
   }
 
   .title-description-add {
-    flex: 0 0 auto;
+    position: absolute;
+    top: 0;
+    right: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     padding: 0 4px;
     border: none;
-    background: transparent;
+    border-radius: var(--radius-s);
+    background: var(--background-primary);
     color: var(--text-faint);
     cursor: pointer;
     opacity: 0;

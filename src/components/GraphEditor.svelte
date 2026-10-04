@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { App, Component } from "obsidian";
+  import type { App, Component, WorkspaceLeaf } from "obsidian";
   import { onMount } from "svelte";
   import type DimGraphPlugin from "../main";
   import type { ProjectStore } from "../stores/project.svelte";
@@ -36,9 +36,10 @@
     plugin: DimGraphPlugin;
     project: ProjectStore;
     parentComponent: Component;
+    leaf: WorkspaceLeaf;
   }
 
-  const { app, plugin, project, parentComponent }: Props = $props();
+  const { app, plugin, project, parentComponent, leaf }: Props = $props();
 
   const ui = createUiStore();
   let fonts: FontConfig = $state(DEFAULT_FONTS);
@@ -580,7 +581,22 @@
 
   // --- Keyboard shortcuts ---
 
+  /**
+   * Return true when this Viewpoint view is the active leaf.
+   *
+   * The window key listener stays active in an inactive tab.
+   * Without this test, Ctrl+X removes the selected notes in the background.
+   *
+   * @returns True when the workspace focus is in this view.
+   */
+  function isActiveView(): boolean {
+    return app.workspace.activeLeaf === leaf;
+  }
+
   function handleKeydown(e: KeyboardEvent) {
+    if (!isActiveView()) return;
+    if (dialogMode) return;
+
     const tag = (e.target as HTMLElement)?.tagName;
     const inInput = tag === "INPUT" || tag === "TEXTAREA";
 
@@ -603,11 +619,17 @@
 
     if (inInput) return;
 
+    // Tab cycles dimensions on the canvas. In an input field, Tab must move
+    // the focus instead.
+    if (e.key === "Tab" && !e.altKey && !e.shiftKey) {
+      const dimIds = Object.keys(project.project.dimensions);
+      if (!dimIds.length) return;
+      e.preventDefault();
+      ui.cycle(dimIds, e.ctrlKey ? -1 : 1);
+      return;
+    }
+
     if (e.key === "Escape") {
-      if (dialogMode) {
-        dialogMode = null;
-        return;
-      }
       if (draggingGroupId) {
         draggingGroupId = null;
         groupDragTracking = false;
