@@ -892,7 +892,8 @@
         height: 1px;
         overflow: visible;
         pointer-events: none;
-        z-index: 1;
+        /* Behind every group box and note card. */
+        z-index: -1;
         transition: opacity 150ms ease;
     }
 
