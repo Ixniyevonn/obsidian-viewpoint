@@ -73,6 +73,7 @@ Each group contains these fields:
 | `name` | Display name as a string. |
 | `cells` | The cells where the group is present. Each cell has an `x` stop and a `y` stop. |
 | `color` | Optional color key for a group with more than one cell, such as `red`. Omit for the name color. |
+| `boxOrder` | Optional vertical order of the group boxes. The key is the `xFrom,yFrom` of a box. A lower value sits higher. Omit for automatic packing. |
 
 A dimension can also contain `x-spectrum` and `y-spectrum`. Omit a spectrum field when that axis has no scale.
 

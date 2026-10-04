@@ -18,6 +18,7 @@
         resizableY?: boolean;
         /** True when a clicked connection dims this group. */
         chainDim?: boolean;
+        onContextMenu?: (e: MouseEvent) => void;
         onRename?: (newName: string) => void;
         onSelect?: (e: MouseEvent) => void;
         onDragStart?: (e: PointerEvent) => void;
@@ -50,6 +51,7 @@
         onDragStart,
         onColorClick,
         onResizeStart,
+        onContextMenu,
     }: Props = $props();
 
     let isEditing = $state(false);
@@ -153,6 +155,7 @@
         ? ' group-preview'
         : ''}{chainDim ? ' group-chain-dim' : ''}"
     groupColor={color}
+    oncontextmenu={(e) => onContextMenu?.(e)}
 >
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div

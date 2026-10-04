@@ -709,6 +709,7 @@ function layoutWithSpectra(
 		complex: boolean;
 		color?: string;
 		colorKey?: string;
+		boxOrder?: Record<string, number>;
 		membersByCell: Map<string, string[]>;
 	}
 
@@ -745,6 +746,7 @@ function layoutWithSpectra(
 			complex,
 			color: undefined,
 			colorKey: g.color,
+			boxOrder: g.boxOrder,
 			membersByCell,
 		});
 	}
@@ -805,6 +807,18 @@ function layoutWithSpectra(
 	function runKey(group: ResolvedGroup, run: GroupRun): string {
 		return `${group.id}:${run.xFrom},${run.yFrom}`;
 	}
+	/**
+	 * Return the manual order of one box.
+	 *
+	 * @param group - The group that owns the box.
+	 * @param run - The box run.
+	 * @returns The manual order, or a value that keeps the box last.
+	 */
+	function boxOrderValue(group: ResolvedGroup, run: GroupRun): number {
+		return (
+			group.boxOrder?.[`${run.xFrom},${run.yFrom}`] ?? Number.POSITIVE_INFINITY
+		);
+	}
 	function runContentHeight(group: ResolvedGroup, run: GroupRun): number {
 		let top = 0;
 		for (const cell of run.cells) {
@@ -855,18 +869,25 @@ function layoutWithSpectra(
 		return offset;
 	}
 
-	/** Return true when a placed box covers one cell. */
+	// Horizontal boxes are placed after every group is checked, so their order
+	// can follow the manual box order. The column spans are claimed during the
+	// check, so a vertical run still avoids them.
+	const pendingRows = new Map<
+		number,
+		{ group: ResolvedGroup; run: GroupRun }[]
+	>();
+	const claimedColumns = new Map<number, { xFrom: number; xTo: number }[]>();
+
+	/** Return true when a horizontal box covers one cell in a row. */
 	function cellTaken(row: number, col: number): boolean {
-		const boxes = rowBoxes.get(row);
-		if (!boxes) return false;
-		return boxes.some((box) => box.xFrom <= col && col <= box.xTo);
+		const spans = claimedColumns.get(row);
+		if (!spans) return false;
+		return spans.some((span) => span.xFrom <= col && col <= span.xTo);
 	}
 
 	for (const group of resolved) {
 		if (!group.placed) continue;
 		const addedBlocked: string[] = [];
-		const addedRuns: string[] = [];
-		const addedBoxes: PlacedBox[] = [];
 		let conflict = false;
 
 		for (const run of group.runs) {
@@ -878,18 +899,6 @@ function layoutWithSpectra(
 					}
 				}
 				if (conflict) break;
-				const height = runContentHeight(group, run);
-				const offset = offsetFreeLowest(run.yFrom, run.xFrom, run.xTo, height);
-				const key = runKey(group, run);
-				runOffset.set(key, offset);
-				addedRuns.push(key);
-				addedBoxes.push({
-					row: run.yFrom,
-					xFrom: run.xFrom,
-					xTo: run.xTo,
-					top: offset,
-					bottom: offset + height,
-				});
 			} else {
 				for (const cell of run.cells) {
 					const key = indexCellKey(cell.yi, cell.xi);
@@ -910,14 +919,38 @@ function layoutWithSpectra(
 		if (conflict) {
 			group.placed = false;
 			for (const key of addedBlocked) blockedCells.delete(key);
-			for (const key of addedRuns) runOffset.delete(key);
 			continue;
 		}
 
-		for (const box of addedBoxes) {
-			const boxes = rowBoxes.get(box.row);
+		for (const run of group.runs) {
+			if (run.yFrom !== run.yTo) continue;
+			const spans = claimedColumns.get(run.yFrom) ?? [];
+			spans.push({ xFrom: run.xFrom, xTo: run.xTo });
+			claimedColumns.set(run.yFrom, spans);
+			const list = pendingRows.get(run.yFrom) ?? [];
+			list.push({ group, run });
+			pendingRows.set(run.yFrom, list);
+		}
+	}
+
+	for (const [row, entries] of pendingRows) {
+		entries.sort(
+			(a, b) => boxOrderValue(a.group, a.run) - boxOrderValue(b.group, b.run),
+		);
+		for (const { group, run } of entries) {
+			const height = runContentHeight(group, run);
+			const offset = offsetFreeLowest(row, run.xFrom, run.xTo, height);
+			runOffset.set(runKey(group, run), offset);
+			const box: PlacedBox = {
+				row,
+				xFrom: run.xFrom,
+				xTo: run.xTo,
+				top: offset,
+				bottom: offset + height,
+			};
+			const boxes = rowBoxes.get(row);
 			if (boxes) boxes.push(box);
-			else rowBoxes.set(box.row, [box]);
+			else rowBoxes.set(row, [box]);
 		}
 	}
 

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { App, Component, WorkspaceLeaf } from "obsidian";
+  import { Menu } from "obsidian";
   import { onDestroy, onMount } from "svelte";
   import type DimGraphPlugin from "../main";
   import type { ProjectStore } from "../stores/project.svelte";
@@ -126,13 +127,14 @@
   });
 
   $effect(() => {
-    if (ui.selectedNodeIds.size > 0) selectedBoxKey = null;
+    if (ui.selectedNodeIds.size > 0) selectedBoxKeys = new Set();
   });
 
   // A chain highlight belongs to one dimension. A dimension switch clears it.
   $effect(() => {
     ui.activeDimensionId;
     ui.clearChainHighlight();
+    selectedBoxKeys = new Set();
   });
 
   $effect(() => {
@@ -252,7 +254,7 @@
       }
 
       ui.selectGroup(groupId, false);
-      selectedBoxKey = null;
+      selectedBoxKeys = new Set();
     }
   }
 
@@ -268,17 +270,30 @@
     ui.clearPendingDelete();
     ui.clearChainHighlight();
     ui.clearSelection();
-    selectedBoxKey = null;
+    selectedBoxKeys = new Set();
     ui.editingShortId = null;
   }
 
   // --- Group selection ---
 
+  /**
+   * Select one group box, or toggle it in the selection.
+   *
+   * @param box - The clicked box.
+   * @param e - The click event. Shift, Ctrl, or Cmd adds to the selection.
+   */
   function handleGroupSelect(box: GroupBoxLike, e: MouseEvent) {
     if (box.groupId === "__ungrouped") return;
     ui.clearPendingDelete();
-    ui.selectGroup(box.groupId, e.shiftKey || e.ctrlKey || e.metaKey);
-    selectedBoxKey = boxKey(box);
+    const key = boxKey(box);
+    if (e.shiftKey || e.ctrlKey || e.metaKey) {
+      const next = new Set(selectedBoxKeys);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      selectedBoxKeys = next;
+    } else {
+      selectedBoxKeys = new Set([key]);
+    }
   }
 
   /** Open the group color popover under the clicked color dot. */
@@ -304,8 +319,12 @@
   let groupDragStartY = $state(0);
   let groupDragTracking = false;
   let groupDragTrackingId: string | null = null;
-  let groupDragMode = $state<"move" | "proxy" | "resize">("move");
+  let groupDragMode = $state<"move" | "proxy" | "resize" | "order">("move");
   let groupDragRun = $state<GroupRun | null>(null);
+  let groupReorderOrder = $state<Record<
+    string,
+    Record<string, number>
+  > | null>(null);
   let groupDragAnchorXStop = $state<string | null>(null);
   let groupDragAnchorYStop = $state<string | null>(null);
   let groupMoveTargetXStop = $state<string | null>(null);
@@ -313,7 +332,7 @@
   let groupResizeAxis = $state<"x" | "y" | null>(null);
   let groupResizeEdge = $state<"min" | "max" | null>(null);
   let groupResizeTargetStop = $state<string | null>(null);
-  let selectedBoxKey = $state<string | null>(null);
+  let selectedBoxKeys = $state<Set<string>>(new Set());
   let colorPopover = $state<{
     groupId: string;
     x: number;
@@ -364,6 +383,23 @@
             ? findNearestXStop(world.x)
             : findNearestYStop(world.y);
       }
+
+      // A drag that stays in the same cell reorders the box in its row.
+      if (groupDragMode === "move" || groupDragMode === "order") {
+        const run = groupDragRun;
+        const sameCell =
+          !!run &&
+          run.yFrom === run.yTo &&
+          groupMoveTargetXStop === groupDragAnchorXStop &&
+          groupMoveTargetYStop === groupDragAnchorYStop;
+        if (sameCell) {
+          groupDragMode = "order";
+          groupReorderOrder = computeReorderOrder(world.y);
+        } else {
+          groupDragMode = "move";
+          groupReorderOrder = null;
+        }
+      }
     }
   }
 
@@ -399,6 +435,98 @@
       yTo: box.yTo,
       cells,
     };
+  }
+
+  /**
+   * Return the box order that the current reorder drag would produce.
+   *
+   * The function reads the current layout, moves the dragged box to the slot
+   * that the pointer is over, and gives every box in the row a rank.
+   *
+   * @param pointerY - The pointer position on the world Y axis.
+   * @returns A box order for each affected group, or null.
+   */
+  function computeReorderOrder(
+    pointerY: number,
+  ): Record<string, Record<string, number>> | null {
+    const run = groupDragRun;
+    const groupId = draggingGroupId;
+    if (!run || !groupId || run.yFrom !== run.yTo) return null;
+    const row = run.yFrom;
+    const boxes = layout.groupBoxes
+      .filter(
+        (box) =>
+          box.groupId !== "__ungrouped" &&
+          box.yFrom === row &&
+          box.yTo === row,
+      )
+      .map((box) => ({ key: boxKey(box), center: box.y + box.height / 2 }))
+      .sort((a, b) => a.center - b.center);
+    const draggedKey = `${groupId}:${run.xFrom},${run.yFrom}`;
+    const dragged = boxes.find((box) => box.key === draggedKey);
+    if (!dragged) return null;
+
+    const others = boxes.filter((box) => box.key !== draggedKey);
+    const target = others.filter((box) => box.center < pointerY).length;
+    const sequence = [...others];
+    sequence.splice(target, 0, dragged);
+
+    const order: Record<string, Record<string, number>> = {};
+    sequence.forEach((box, index) => {
+      const [id, position] = box.key.split(":");
+      const map = order[id] ?? {};
+      map[position] = index;
+      order[id] = map;
+    });
+    return order;
+  }
+
+  /**
+   * Open the context menu for a group box.
+   *
+   * The menu acts on every selected box.
+   *
+   * @param box - The box that the pointer is over.
+   * @param e - The context menu event.
+   */
+  function handleGroupContextMenu(box: GroupBoxLike, e: MouseEvent) {
+    if (box.groupId === "__ungrouped") return;
+    const dimId = ui.activeDimensionId;
+    if (!dimId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const key = boxKey(box);
+    if (!selectedBoxKeys.has(key)) selectedBoxKeys = new Set([key]);
+
+    const dim = project.project.dimensions[dimId];
+    if (!dim) return;
+    const positionsByGroup = new Map<string, Set<string>>();
+    for (const selected of selectedBoxKeys) {
+      const [groupId, position] = selected.split(":");
+      const positions = positionsByGroup.get(groupId) ?? new Set<string>();
+      positions.add(position);
+      positionsByGroup.set(groupId, positions);
+    }
+    const entries = [...positionsByGroup].map(([groupId, positions]) => {
+      const group = dim.groups.find((g) => g.id === groupId);
+      const remaining = { ...group?.boxOrder };
+      for (const position of positions) delete remaining[position];
+      return {
+        groupId,
+        boxOrder: Object.keys(remaining).length ? remaining : null,
+      };
+    });
+
+    const menu = new Menu();
+    menu.addItem((item) =>
+      item
+        .setTitle("Autosort")
+        .setIcon("arrow-up-down")
+        .onClick(() => {
+          project.setGroupBoxOrders(dimId, entries);
+        }),
+    );
+    menu.showAtMouseEvent(e);
   }
 
   function handleGroupPointerDown(box: GroupBoxLike, e: PointerEvent) {
@@ -446,12 +574,13 @@
       axis === "x" ? findNearestXStop(world.x) : findNearestYStop(world.y);
     groupDragStartX = world.x;
     groupDragStartY = world.y;
-    selectedBoxKey = `${box.groupId}:${box.xFrom},${box.yFrom}`;
+    selectedBoxKeys = new Set([boxKey(box)]);
   }
 
   /** Compute the group cells that the current drag would produce. */
   function computePendingCells(): GroupCell[] | null {
     if (!draggingGroupId) return null;
+    if (groupDragMode === "order") return null;
     const dimId = ui.activeDimensionId;
     if (!dimId) return null;
     const dim = project.project.dimensions[dimId];
@@ -524,37 +653,44 @@
     project.setGroupCells(dimId, draggingGroupId, cells);
   }
 
-  /** Remove the selected box, or the group when it is the last box. */
-  function removeSelectedBox() {
+  /**
+   * Remove every selected box.
+   *
+   * The function drops the group when a selected box is its last box.
+   */
+  function removeSelectedBoxes() {
     const dimId = ui.activeDimensionId;
-    const key = selectedBoxKey;
-    if (!dimId || !key) return;
-    const [groupId, pos] = key.split(":");
-    const [xf, yf] = pos.split(",").map(Number);
+    if (!dimId || selectedBoxKeys.size === 0) return;
     const dim = project.project.dimensions[dimId];
-    const group = dim?.groups.find((g) => g.id === groupId);
-    if (!dim || !group) return;
+    if (!dim) return;
     const xStops = dim["x-spectrum"]?.stops ?? null;
     const yStops = dim["y-spectrum"]?.stops ?? null;
-    const indices = cellsToIndices(group.cells, xStops, yStops);
-    const run = decomposeGroupRuns(indices).find(
-      (item) => item.xFrom === xf && item.yFrom === yf,
-    );
-    if (!run) return;
-    const runKeys = new Set(run.cells.map((cell) => `${cell.xi},${cell.yi}`));
-    const remaining = indices.filter(
-      (cell) => !runKeys.has(`${cell.xi},${cell.yi}`),
-    );
-    if (remaining.length === 0) {
-      project.removeGroup(dimId, groupId);
-    } else {
-      project.setGroupCells(
-        dimId,
-        groupId,
-        indicesToCells(remaining, xStops, yStops),
+
+    for (const key of [...selectedBoxKeys]) {
+      const [groupId, pos] = key.split(":");
+      const [xf, yf] = pos.split(",").map(Number);
+      const group = dim.groups.find((g) => g.id === groupId);
+      if (!group) continue;
+      const indices = cellsToIndices(group.cells, xStops, yStops);
+      const run = decomposeGroupRuns(indices).find(
+        (item) => item.xFrom === xf && item.yFrom === yf,
       );
+      if (!run) continue;
+      const runKeys = new Set(run.cells.map((cell) => `${cell.xi},${cell.yi}`));
+      const remaining = indices.filter(
+        (cell) => !runKeys.has(`${cell.xi},${cell.yi}`),
+      );
+      if (remaining.length === 0) {
+        project.removeGroup(dimId, groupId);
+      } else {
+        project.setGroupCells(
+          dimId,
+          groupId,
+          indicesToCells(remaining, xStops, yStops),
+        );
+      }
     }
-    selectedBoxKey = null;
+    selectedBoxKeys = new Set();
     ui.clearSelection();
   }
 
@@ -576,6 +712,8 @@
       groupDragTracking = false;
       groupDragTrackingId = null;
       groupDragRun = null;
+      groupDragMode = "move";
+      groupReorderOrder = null;
       groupMoveTargetXStop = null;
       groupMoveTargetYStop = null;
       groupResizeAxis = null;
@@ -632,13 +770,25 @@
     }
 
     if (draggingGroupId && ui.activeDimensionId && hasSpectra) {
-      commitGroupDrag();
+      if (groupDragMode === "order" && groupReorderOrder) {
+        project.setGroupBoxOrders(
+          ui.activeDimensionId,
+          Object.entries(groupReorderOrder).map(([groupId, boxOrder]) => ({
+            groupId,
+            boxOrder,
+          })),
+        );
+      } else {
+        commitGroupDrag();
+      }
     }
 
     draggingGroupId = null;
     groupDragTracking = false;
     groupDragTrackingId = null;
     groupDragRun = null;
+    groupDragMode = "move";
+    groupReorderOrder = null;
     groupMoveTargetXStop = null;
     groupMoveTargetYStop = null;
     groupResizeAxis = null;
@@ -783,6 +933,8 @@
         draggingGroupId = null;
         groupDragTracking = false;
         groupDragRun = null;
+        groupDragMode = "move";
+        groupReorderOrder = null;
         groupMoveTargetXStop = null;
         groupMoveTargetYStop = null;
         groupResizeAxis = null;
@@ -803,6 +955,8 @@
       } else if (ui.editingShortId || ui.editingLongId) {
         ui.editingShortId = null;
         ui.editingLongId = null;
+      } else if (selectedBoxKeys.size > 0) {
+        selectedBoxKeys = new Set();
       } else if (ui.hasSelection) {
         ui.clearSelection();
       } else {
@@ -814,11 +968,11 @@
     if (e.key === "Delete" || e.key === "Backspace") {
       if (
         ui.selectedNodeIds.size === 0 &&
-        selectedBoxKey &&
+        selectedBoxKeys.size > 0 &&
         ui.activeDimensionId
       ) {
         e.preventDefault();
-        removeSelectedBox();
+        removeSelectedBoxes();
         return;
       }
       if (ui.hasSelection) {
@@ -830,7 +984,7 @@
           project.removeGroups(ui.activeDimensionId, [...ui.selectedGroupIds]);
         }
         ui.clearSelection();
-        selectedBoxKey = null;
+        selectedBoxKeys = new Set();
       }
       return;
     }
@@ -993,6 +1147,30 @@
     const dimId = ui.activeDimensionId;
     if (!dimId) return null;
 
+    if (groupDragMode === "order" && draggingGroupId && groupReorderOrder) {
+      const dim = project.project.dimensions[dimId];
+      if (!dim) return null;
+      const reorder = groupReorderOrder;
+      const previewProject: ProjectData = {
+        ...project.project,
+        dimensions: {
+          ...project.project.dimensions,
+          [dimId]: {
+            ...dim,
+            groups: dim.groups.map((g) =>
+              reorder[g.id]
+                ? {
+                    ...g,
+                    boxOrder: { ...g.boxOrder, ...reorder[g.id] },
+                  }
+                : g,
+            ),
+          },
+        },
+      };
+      return layoutEngine(previewProject, dimId, { fonts, measuredHeights });
+    }
+
     if (ui.isDraggingNode && ui.draggingNodeId && nodeDropGroupId) {
       const previewProject = applyNodeDrop(
         project.project,
@@ -1089,6 +1267,9 @@
       return groupResizeTargetStop
         ? `Resize to ${groupResizeTargetStop}`
         : "Drag a knob to span stops";
+    }
+    if (groupDragMode === "order") {
+      return "Drag to reorder in the row";
     }
     if (groupDragMode === "proxy") {
       const parts: string[] = [];
@@ -1194,10 +1375,10 @@
           highlight={nodeDropGroupId === box.groupId}
           chainDim={ui.hasChainHighlight &&
             !box.memberIds.some((id) => ui.chainNodeIds.has(id))}
-          selected={selectedBoxKey === boxKey(box)}
+          selected={selectedBoxKeys.has(boxKey(box))}
           draggable={hasSpectra &&
             box.groupId !== "__ungrouped" &&
-            selectedBoxKey === boxKey(box)}
+            selectedBoxKeys.has(boxKey(box))}
           beingDragged={draggingGroupId === box.groupId}
           resizableX={!previewLayout &&
             hasSpectra &&
@@ -1210,6 +1391,7 @@
             box.groupId !== "__ungrouped" &&
             box.xFrom === box.xTo}
           onSelect={(e) => handleGroupSelect(box, e)}
+          onContextMenu={(e) => handleGroupContextMenu(box, e)}
           onRename={ui.activeDimensionId
             ? (newName) => handleGroupRename(box.groupId, newName)
             : undefined}

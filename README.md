@@ -116,6 +116,9 @@ Keyboard shortcuts below use Ctrl. The editor also accepts Cmd for selection, co
 | Switch dimensions | Click a dimension button, or scroll without Ctrl. |
 | Select the next or previous dimension | Use Tab or Ctrl+Tab. |
 | Move a group box | Select the box, then drag its body. |
+| Reorder boxes in a row | Select the groups, then drag a box up or down inside its row. |
+| Return boxes to automatic packing | Right-click a selected box, then choose **Autosort**. |
+| Select several boxes | Shift-click or Ctrl-click each group box. |
 | Resize a group box | Drag an edge knob to the wanted stop. |
 | Place a copy of a group | Select the box, hold Shift, then drag it to another cell. |
 | Remove one group box | Select the box, then use Delete or Backspace. |
@@ -140,6 +143,7 @@ These limits describe the current implementation:
 - Middle-click marks a node as focused. Shift+middle-click can mark a second node. Focus does not recenter the canvas or calculate paths or opacity.
 - Node dragging changes group membership and the node stop. It does not change the order inside a group.
 - Select a group box before you move it. Dragging a selected box moves only that box. A drag on an unselected box pans the view.
+- A vertical drag inside a row gives the box a manual position. Select the boxes and choose **Autosort** from the right-click menu to return them to automatic packing.
 - A box that covers several rows claims its cells. The layout stacks single-row boxes in shared cells.
 - The layout reads `node_order` for named groups. It ignores entries for ungrouped notes.
 - The clipboard belongs to one Viewpoint view. Paste keeps links between the pasted notes and drops links to notes outside the copy.

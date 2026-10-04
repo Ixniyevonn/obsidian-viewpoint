@@ -143,6 +143,56 @@ test("two point groups in one cell stack", () => {
 	expect(layout.groups.g2.y).toBeGreaterThan(layout.groups.g1.y);
 });
 
+test("a manual box order moves a box above the other", () => {
+	const layout = layoutEngine(
+		makeProject([
+			{ id: "g1", name: "G1", cells: [cell("a")], boxOrder: { "0,0": 1 } },
+			{ id: "g2", name: "G2", cells: [cell("a")], boxOrder: { "0,0": 0 } },
+		]),
+		"d",
+	);
+	expect(layout.groups.g2.y).toBeLessThan(layout.groups.g1.y);
+});
+
+test("a vertical run never overlaps a horizontal box", () => {
+	const project: ProjectData = {
+		meta: { name: "T", created: "", modified: "" },
+		dimensions: {
+			d: {
+				name: "D",
+				"x-spectrum": { name: "X", poles: ["l", "r"], stops: ["a", "b"] },
+				"y-spectrum": { name: "Y", poles: ["t", "b"], stops: ["r0", "r1"] },
+				groups: [
+					{ id: "flat", name: "Flat", cells: [{ x: "a", y: "r0" }] },
+					{
+						id: "tall",
+						name: "Tall",
+						cells: [
+							{ x: "a", y: "r0" },
+							{ x: "a", y: "r1" },
+						],
+					},
+				],
+			},
+		},
+		notes: {},
+		node_order: {},
+	};
+	const boxes = layoutEngine(project, "d").groupBoxes;
+	for (let i = 0; i < boxes.length; i++) {
+		for (let j = i + 1; j < boxes.length; j++) {
+			const a = boxes[i];
+			const b = boxes[j];
+			const overlap =
+				a.x < b.x + b.width &&
+				b.x < a.x + a.width &&
+				a.y < b.y + b.height &&
+				b.y < a.y + a.height;
+			expect(overlap).toBe(false);
+		}
+	}
+});
+
 test("a point group stacks below a span that shares its stop", () => {
 	const layout = layoutEngine(
 		makeProject([

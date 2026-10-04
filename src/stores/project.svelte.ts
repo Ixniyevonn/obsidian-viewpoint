@@ -610,6 +610,50 @@ export function createProjectStore() {
 			return true;
 		},
 
+		/**
+		 * Set or clear the manual vertical order of group boxes.
+		 *
+		 * @param dimensionId - The dimension of the groups.
+		 * @param entries - One entry for each group. A null order clears the
+		 * field and returns the boxes to automatic packing.
+		 * @returns True when at least one group changes.
+		 */
+		setGroupBoxOrders(
+			dimensionId: string,
+			entries: { groupId: string; boxOrder: Record<string, number> | null }[],
+		): boolean {
+			const dim = project.dimensions[dimensionId];
+			if (!dim) return false;
+
+			/** Return true when an entry changes its group. */
+			function changes(entry: {
+				groupId: string;
+				boxOrder: Record<string, number> | null;
+			}): boolean {
+				const group = dim.groups.find((g) => g.id === entry.groupId);
+				if (!group) return false;
+				if (entry.boxOrder) {
+					return (
+						JSON.stringify(group.boxOrder) !== JSON.stringify(entry.boxOrder)
+					);
+				}
+				return group.boxOrder !== undefined;
+			}
+
+			if (!entries.some(changes)) return false;
+			snap();
+			for (const entry of entries) {
+				if (!changes(entry)) continue;
+				const group = dim.groups.find((g) => g.id === entry.groupId);
+				if (!group) continue;
+				if (entry.boxOrder) group.boxOrder = entry.boxOrder;
+				else delete group.boxOrder;
+			}
+			touch();
+			notify();
+			return true;
+		},
+
 		removeGroup(dimensionId: string, groupId: string) {
 			snap();
 			const dim = project.dimensions[dimensionId];

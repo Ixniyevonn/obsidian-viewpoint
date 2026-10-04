@@ -24,6 +24,12 @@ export interface Group {
 	 * custom CSS color, such as `#3b82f6`. Omitted for the name color.
 	 */
 	color?: string;
+	/**
+	 * Optional vertical order of the group boxes. The key is the `xFrom,yFrom`
+	 * of a box. A lower value sits higher in its row. Omitted for automatic
+	 * packing.
+	 */
+	boxOrder?: Record<string, number>;
 }
 
 /** The stops that a note uses inside its group, per spectrum axis. */
