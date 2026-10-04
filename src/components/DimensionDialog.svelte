@@ -250,15 +250,19 @@
                 class:drag-over={dragAxis === "x" &&
                   dragOverIdx === i &&
                   dragFromIdx !== i}
-                draggable="true"
-                ondragstart={() => handleDragStart("x", i)}
                 ondragover={(e) => handleDragOver(e, i)}
                 ondrop={(e) => handleDrop(e, "x", i)}
-                ondragend={handleDragEnd}
               >
-                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <span
+                  class="drag-handle"
+                  title="Drag to reorder"
+                  draggable="true"
+                  ondragstart={() => handleDragStart("x", i)}
+                  ondragend={handleDragEnd}>⠿</span
+                >
                 <input
                   class="field-input stop-input"
+                  draggable="false"
                   value={stop}
                   oninput={(e) =>
                     updateStop("x", i, (e.target as HTMLInputElement).value)}
@@ -330,15 +334,19 @@
                 class:drag-over={dragAxis === "y" &&
                   dragOverIdx === i &&
                   dragFromIdx !== i}
-                draggable="true"
-                ondragstart={() => handleDragStart("y", i)}
                 ondragover={(e) => handleDragOver(e, i)}
                 ondrop={(e) => handleDrop(e, "y", i)}
-                ondragend={handleDragEnd}
               >
-                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <span
+                  class="drag-handle"
+                  title="Drag to reorder"
+                  draggable="true"
+                  ondragstart={() => handleDragStart("y", i)}
+                  ondragend={handleDragEnd}>⠿</span
+                >
                 <input
                   class="field-input stop-input"
+                  draggable="false"
                   value={stop}
                   oninput={(e) =>
                     updateStop("y", i, (e.target as HTMLInputElement).value)}
