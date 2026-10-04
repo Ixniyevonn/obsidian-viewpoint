@@ -108,6 +108,7 @@ Keyboard shortcuts below use Ctrl. The editor also accepts Cmd for selection, co
 | Edit a connection label | Double-click the curve or its label. |
 | Change a connection endpoint | Drag the curve near that endpoint, then click the replacement node. |
 | Delete a connection bundle | Right-click its curve, then click the red curve. |
+| Highlight a connection cluster | Click its curve. Click the curve again to clear. |
 | Add a dimension | Click **+** above the canvas. |
 | Edit the active dimension | Click the pencil button above the canvas. |
 | Switch dimensions | Click a dimension button, or scroll without Ctrl. |
@@ -125,7 +126,9 @@ Keyboard shortcuts below use Ctrl. The editor also accepts Cmd for selection, co
 
 The dimension switcher shows buttons for the first ten dimensions. Scrolling and Tab also reach dimensions beyond those buttons.
 
-Multiple connections between the same notes share a curve. Opposite connections show arrows in each direction. Deleting the curve removes all connections in that bundle.
+Multiple connections between the same notes share a curve. Each arrow points from the source note to the target note. Opposite connections show arrows in each direction. Deleting the curve removes all connections in that bundle.
+
+A click on a curve highlights every note in its connected cluster. The cluster connections use the accent color. The other notes, groups, and connections dim. Click the curve again, click empty space, or press Esc to clear the highlight.
 
 ## Current limits
 

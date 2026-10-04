@@ -71,6 +71,10 @@
   let tagTransitioning = $state(false);
   const tagExpanded = $derived(tags.length > 0 || hovered || tagEditing);
   const isBeingDragged = $derived(ui.draggingNodeId === noteId);
+  // A clicked connection dims every note outside its cluster.
+  const isChainDimmed = $derived(
+    ui.hasChainHighlight && !ui.chainNodeIds.has(noteId),
+  );
 
   let shortInputEl: HTMLTextAreaElement | undefined = $state();
   let editValue = $state("");
@@ -446,7 +450,7 @@
     ? ' dragging'
     : ''}{preview ? ' preview' : ''}{preview && isBeingDragged
     ? ' preview-active'
-    : ''}"
+    : ''}{isChainDimmed ? ' chain-dim' : ''}"
   onclick={handleClick}
   ondblclick={handleDblClick}
   oncontextmenu={handleContextMenu}
@@ -589,7 +593,15 @@
     position: relative;
     transition:
       border-color 120ms ease,
-      box-shadow 120ms ease;
+      box-shadow 120ms ease,
+      opacity 150ms ease,
+      filter 150ms ease;
+  }
+
+  /* A note outside the highlighted cluster fades back. */
+  :global(.node-card.chain-dim) {
+    opacity: 0.15;
+    filter: blur(1.5px);
   }
 
   :global(.node-card.preview) {

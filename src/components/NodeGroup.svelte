@@ -16,6 +16,8 @@
         beingDragged?: boolean;
         resizableX?: boolean;
         resizableY?: boolean;
+        /** True when a clicked connection dims this group. */
+        chainDim?: boolean;
         onRename?: (newName: string) => void;
         onSelect?: (e: MouseEvent) => void;
         onDragStart?: (e: PointerEvent) => void;
@@ -42,6 +44,7 @@
         beingDragged = false,
         resizableX = false,
         resizableY = false,
+        chainDim = false,
         onRename,
         onSelect,
         onDragStart,
@@ -146,7 +149,9 @@
         ? ' group-selected'
         : ''}{draggable ? ' group-draggable' : ''}{beingDragged
         ? ' group-being-dragged'
-        : ''}{color ? ' group-complex' : ''}{preview ? ' group-preview' : ''}"
+        : ''}{color ? ' group-complex' : ''}{preview
+        ? ' group-preview'
+        : ''}{chainDim ? ' group-chain-dim' : ''}"
     groupColor={color}
 >
     <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -243,7 +248,14 @@
         pointer-events: none;
         transition:
             border-color 120ms ease,
-            box-shadow 120ms ease;
+            box-shadow 120ms ease,
+            opacity 150ms ease,
+            filter 150ms ease;
+    }
+    /* A group outside the highlighted cluster fades back with its label. */
+    :global(.node-group.group-chain-dim) {
+        opacity: 0.15;
+        filter: blur(1.5px);
     }
     :global(.node-group.group-drop-target) {
         border-color: var(--interactive-accent);

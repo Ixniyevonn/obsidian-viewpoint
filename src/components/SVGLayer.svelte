@@ -3,6 +3,7 @@
     import { fade } from "svelte/transition";
     import type { ProjectStore } from "../stores/project.svelte";
     import type { UiStore } from "../stores/ui.svelte";
+    import { collectConnectedCluster } from "../utils/connections";
     import type { LayoutResult, NodeLayout } from "../utils/layout";
     import type { ViewRect } from "../utils/viewport";
 
@@ -605,6 +606,15 @@
         }
 
         ui.clearPendingDelete();
+
+        // A second click on the same connection clears the highlight.
+        if (ui.chainKey === bundle.key) {
+            ui.clearChainHighlight();
+            return;
+        }
+
+        const cluster = collectConnectedCluster(rawEdges, bundle.forwardFrom);
+        ui.setChainHighlight(bundle.key, cluster);
     }
 
     function handleBundlePointerDown(e: PointerEvent, bundle: EdgeBundle) {
@@ -755,11 +765,21 @@
         {@const labelText = bundleLabelText(bundle)}
         {@const isStrong = bundle.strength > 1}
         {@const reverseOnly = isReverseOnly(bundle)}
+        {@const chainActive =
+            ui.hasChainHighlight &&
+            ui.chainNodeIds.has(bundle.forwardFrom) &&
+            ui.chainNodeIds.has(bundle.forwardTo)}
+        {@const chainDim =
+            ui.hasChainHighlight &&
+            !(ui.chainNodeIds.has(bundle.forwardFrom) &&
+                ui.chainNodeIds.has(bundle.forwardTo))}
         <g
             class="edge-group"
             class:pending-delete={pendingDel}
             class:retargeting
             class:strong={isStrong}
+            class:chain-active={chainActive}
+            class:chain-dim={chainDim}
             in:fade={{ duration: 50, delay: 50 }}
             out:fade={{ duration: 50 }}
         >
@@ -878,11 +898,20 @@
 
     .edge-group {
         pointer-events: auto;
+        transition:
+            opacity 150ms ease,
+            filter 150ms ease;
     }
 
     .edge-group.retargeting {
         opacity: 0.2;
         pointer-events: none;
+    }
+
+    /* A connection outside the highlighted cluster fades back. */
+    .edge-group.chain-dim {
+        opacity: 0.1;
+        filter: blur(0.6px);
     }
 
     .edge-hit {
@@ -926,6 +955,15 @@
     }
     .edge-group.pending-delete .edge-hit {
         cursor: pointer;
+    }
+
+    /* Connections inside the highlighted cluster stay clear and use the accent. */
+    .edge-group.chain-active .edge-line {
+        stroke: var(--interactive-accent);
+        filter: drop-shadow(0 0 3px var(--interactive-accent));
+    }
+    .edge-group.chain-active:hover .edge-line {
+        stroke: var(--interactive-accent);
     }
 
     /* Strong connections — subtle glow */

@@ -48,6 +48,10 @@ export function createUiStore() {
 	let dragGhostX = $state(0);
 	let dragGhostY = $state(0);
 
+	// Chain highlight, set by a click on a connection
+	let chainKey = $state<string | null>(null);
+	let chainNodeIds = $state<Set<string>>(new Set());
+
 	return {
 		// --- Dimensions ---
 		get activeDimensionId() {
@@ -343,6 +347,33 @@ export function createUiStore() {
 
 		endDrag() {
 			draggingNodeId = null;
+		},
+
+		// --- Chain highlight ---
+		get chainKey() {
+			return chainKey;
+		},
+		get chainNodeIds() {
+			return chainNodeIds;
+		},
+		get hasChainHighlight() {
+			return chainKey !== null;
+		},
+
+		/**
+		 * Highlight a cluster of notes.
+		 *
+		 * @param key - The bundle key of the clicked connection.
+		 * @param nodeIds - The notes in the cluster.
+		 */
+		setChainHighlight(key: string, nodeIds: Set<string>) {
+			chainKey = key;
+			chainNodeIds = nodeIds;
+		},
+
+		clearChainHighlight() {
+			chainKey = null;
+			chainNodeIds = new Set();
 		},
 
 		// --- Bulk reset ---

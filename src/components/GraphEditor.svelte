@@ -129,6 +129,12 @@
     if (ui.selectedNodeIds.size > 0) selectedBoxKey = null;
   });
 
+  // A chain highlight belongs to one dimension. A dimension switch clears it.
+  $effect(() => {
+    ui.activeDimensionId;
+    ui.clearChainHighlight();
+  });
+
   $effect(() => {
     ui.reconcile(Object.keys(project.project.dimensions));
   });
@@ -260,6 +266,7 @@
       return;
     }
     ui.clearPendingDelete();
+    ui.clearChainHighlight();
     ui.clearSelection();
     selectedBoxKey = null;
     ui.editingShortId = null;
@@ -791,6 +798,8 @@
         ui.cancelRetarget();
       } else if (ui.pendingDeleteIndex !== null) {
         ui.clearPendingDelete();
+      } else if (ui.hasChainHighlight) {
+        ui.clearChainHighlight();
       } else if (ui.editingShortId || ui.editingLongId) {
         ui.editingShortId = null;
         ui.editingLongId = null;
@@ -1049,6 +1058,23 @@
   });
 
   /**
+   * The group IDs that hold a note in the highlighted cluster.
+   *
+   * A group outside this set dims while a connection highlight is active. An
+   * ungrouped note adds `__ungrouped`.
+   */
+  const chainGroupIds = $derived.by(() => {
+    const groupIds = new Set<string>();
+    const dimId = ui.activeDimensionId;
+    if (!dimId) return groupIds;
+    for (const nodeId of ui.chainNodeIds) {
+      const groupId = project.project.notes[nodeId]?.membership?.[dimId];
+      groupIds.add(groupId ?? "__ungrouped");
+    }
+    return groupIds;
+  });
+
+  /**
    * Group the card widths by column and by note.
    *
    * The width snap uses the widths of the other cards in the same column. A
@@ -1183,6 +1209,7 @@
           preview={!!previewLayout}
           emphasis={ui.isDraggingNode}
           highlight={nodeDropGroupId === box.groupId}
+          chainDim={ui.hasChainHighlight && !chainGroupIds.has(box.groupId)}
           selected={selectedBoxKey === boxKey(box)}
           draggable={hasSpectra && box.groupId !== "__ungrouped"}
           beingDragged={draggingGroupId === box.groupId}
