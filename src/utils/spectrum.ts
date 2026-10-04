@@ -12,24 +12,24 @@
  *   when no name changed.
  */
 export function spectrumStopRenameMap(
-    oldStops: string[] | undefined,
-    newStops: string[] | undefined,
+	oldStops: string[] | undefined,
+	newStops: string[] | undefined,
 ): Map<string, string> {
-    const rename = new Map<string, string>();
-    if (!oldStops || !newStops) return rename;
+	const rename = new Map<string, string>();
+	if (!oldStops || !newStops) return rename;
 
-    const oldSet = new Set(oldStops);
-    const newSet = new Set(newStops);
-    const count = Math.min(oldStops.length, newStops.length);
+	const oldSet = new Set(oldStops);
+	const newSet = new Set(newStops);
+	const count = Math.min(oldStops.length, newStops.length);
 
-    for (let i = 0; i < count; i++) {
-        const from = oldStops[i];
-        const to = newStops[i];
-        if (from === to) continue;
-        if (newSet.has(from)) continue;
-        if (oldSet.has(to)) continue;
-        rename.set(from, to);
-    }
+	for (let i = 0; i < count; i++) {
+		const from = oldStops[i];
+		const to = newStops[i];
+		if (from === to) continue;
+		if (newSet.has(from)) continue;
+		if (oldSet.has(to)) continue;
+		rename.set(from, to);
+	}
 
-    return rename;
+	return rename;
 }

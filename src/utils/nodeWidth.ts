@@ -17,18 +17,24 @@ export const NODE_HORIZONTAL_CHROME = 38;
  * @returns The automatic card width in pixels.
  */
 export function automaticNodeWidth(
-    note: Pick<Note, "title" | "short">,
-    titleWidth?: number,
+	note: Pick<Note, "title" | "short">,
+	titleWidth?: number,
 ): number {
-    const text = `${note.title} ${note.short}`
-        .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, alias) => alias ?? target)
-        .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-        .replace(/\s+/g, " ").trim();
+	const text = `${note.title} ${note.short}`
+		.replace(
+			/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,
+			(_, target, alias) => alias ?? target,
+		)
+		.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+		.replace(/\s+/g, " ")
+		.trim();
 
-    const base = AUTO_NODE_WIDTHS[text.length <= 120 ? 0 : text.length <= 300 ? 1 : 2];
-    const titleNeeds = titleWidth === undefined ? 0 : titleWidth + NODE_HORIZONTAL_CHROME;
-    const width = Math.max(base, titleNeeds);
-    return Math.ceil(Math.max(MIN_NODE_WIDTH, Math.min(MAX_NODE_WIDTH, width)));
+	const base =
+		AUTO_NODE_WIDTHS[text.length <= 120 ? 0 : text.length <= 300 ? 1 : 2];
+	const titleNeeds =
+		titleWidth === undefined ? 0 : titleWidth + NODE_HORIZONTAL_CHROME;
+	const width = Math.max(base, titleNeeds);
+	return Math.ceil(Math.max(MIN_NODE_WIDTH, Math.min(MAX_NODE_WIDTH, width)));
 }
 
 /**
@@ -40,21 +46,29 @@ export function automaticNodeWidth(
  * @returns The manual width when the note has one, or the automatic width.
  */
 export function noteWidth(note: Note, titleWidth?: number): number {
-    return note.width !== undefined && Number.isFinite(note.width)
-        ? Math.max(MIN_NODE_WIDTH, Math.min(MAX_NODE_WIDTH, note.width))
-        : automaticNodeWidth(note, titleWidth);
+	return note.width !== undefined && Number.isFinite(note.width)
+		? Math.max(MIN_NODE_WIDTH, Math.min(MAX_NODE_WIDTH, note.width))
+		: automaticNodeWidth(note, titleWidth);
 }
 
-export function snapNodeWidth(width: number, candidates: number[], zoom = 1): number {
-    const clamped = Math.max(MIN_NODE_WIDTH, Math.min(MAX_NODE_WIDTH, width));
-    let result = clamped;
-    let distance = 8 / Math.max(0.01, zoom);
-    for (const candidate of candidates) {
-        const delta = Math.abs(candidate - clamped);
-        if (candidate >= MIN_NODE_WIDTH && candidate <= MAX_NODE_WIDTH && delta <= distance) {
-            result = candidate;
-            distance = delta;
-        }
-    }
-    return Math.round(result);
+export function snapNodeWidth(
+	width: number,
+	candidates: number[],
+	zoom = 1,
+): number {
+	const clamped = Math.max(MIN_NODE_WIDTH, Math.min(MAX_NODE_WIDTH, width));
+	let result = clamped;
+	let distance = 8 / Math.max(0.01, zoom);
+	for (const candidate of candidates) {
+		const delta = Math.abs(candidate - clamped);
+		if (
+			candidate >= MIN_NODE_WIDTH &&
+			candidate <= MAX_NODE_WIDTH &&
+			delta <= distance
+		) {
+			result = candidate;
+			distance = delta;
+		}
+	}
+	return Math.round(result);
 }

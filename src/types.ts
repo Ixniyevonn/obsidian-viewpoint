@@ -1,7 +1,7 @@
 export interface Spectrum {
-    name: string;
-    poles: [string, string];
-    stops: string[];
+	name: string;
+	poles: [string, string];
+	stops: string[];
 }
 
 /**
@@ -10,96 +10,96 @@ export interface Spectrum {
  * A null axis means the axis has no spectrum or the group is not placed on it.
  */
 export interface GroupCell {
-    x: string | null;
-    y: string | null;
+	x: string | null;
+	y: string | null;
 }
 
 export interface Group {
-    id: string;
-    name: string;
-    /** The cells where the group is present. An empty list means auto or unplaced. */
-    cells: GroupCell[];
-    /** Optional explicit color key, such as `red`. Omitted for the name color. */
-    color?: string;
+	id: string;
+	name: string;
+	/** The cells where the group is present. An empty list means auto or unplaced. */
+	cells: GroupCell[];
+	/** Optional explicit color key, such as `red`. Omitted for the name color. */
+	color?: string;
 }
 
 /** The stops that a note uses inside its group, per spectrum axis. */
 export interface Placement {
-    x?: string;
-    y?: string;
+	x?: string;
+	y?: string;
 }
 
 export interface Dimension {
-    name: string;
-    "x-spectrum"?: Spectrum;
-    "y-spectrum"?: Spectrum;
-    groups: Group[];
+	name: string;
+	"x-spectrum"?: Spectrum;
+	"y-spectrum"?: Spectrum;
+	groups: Group[];
 }
 
 export interface ConnectionOutgoing {
-    to: string;
-    label: string | null;
+	to: string;
+	label: string | null;
 }
 
 export interface Note {
-    title: string;
-    short: string;
-    long: string;
-    width?: number;
-    tags?: string[];
-    membership: Record<string, string | null>;
-    connections: Record<string, { to: string; label: string | null }[]>;
-    /** Stop placement inside the group, keyed by dimension ID. */
-    placement?: Record<string, Placement>;
+	title: string;
+	short: string;
+	long: string;
+	width?: number;
+	tags?: string[];
+	membership: Record<string, string | null>;
+	connections: Record<string, { to: string; label: string | null }[]>;
+	/** Stop placement inside the group, keyed by dimension ID. */
+	placement?: Record<string, Placement>;
 }
 
 /** One note copy that the clipboard holds. */
 export interface ClipboardNote {
-    /** The source note ID. Paste uses it to remap links between the pasted notes. */
-    id: string;
-    title: string;
-    short: string;
-    long: string;
-    width?: number;
-    tags?: string[];
-    /** The connections of the source note, keyed by dimension ID. */
-    connections: Record<string, { to: string; label: string | null }[]>;
+	/** The source note ID. Paste uses it to remap links between the pasted notes. */
+	id: string;
+	title: string;
+	short: string;
+	long: string;
+	width?: number;
+	tags?: string[];
+	/** The connections of the source note, keyed by dimension ID. */
+	connections: Record<string, { to: string; label: string | null }[]>;
 }
 
 export interface Connection {
-    from: string;
-    to: string;
-    label: string | null;
+	from: string;
+	to: string;
+	label: string | null;
 }
 
 export interface ProjectMeta {
-    name: string;
-    created: string;
-    modified: string;
+	name: string;
+	created: string;
+	modified: string;
 }
 
 export interface ProjectData {
-    meta: ProjectMeta;
-    dimensions: Record<string, Dimension>;
-    notes: Record<string, Note>;
-    node_order: Record<string, string[]>;
+	meta: ProjectMeta;
+	dimensions: Record<string, Dimension>;
+	notes: Record<string, Note>;
+	node_order: Record<string, string[]>;
 }
 
 // Runtime UI state (not serialized)
 export interface FocusState {
-    primary: string | null;
-    secondary: string | null;
-    type: "single" | "dual";
+	primary: string | null;
+	secondary: string | null;
+	type: "single" | "dual";
 }
 
 export interface ViewportState {
-    panX: number;
-    panY: number;
-    zoom: number;
+	panX: number;
+	panY: number;
+	zoom: number;
 }
 
 export interface SelectionState {
-    nodes: Set<string>;
-    connections: Set<number>;
-    group: string | null;
+	nodes: Set<string>;
+	connections: Set<number>;
+	group: string | null;
 }

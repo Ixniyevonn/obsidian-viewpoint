@@ -14,16 +14,16 @@ const MARKDOWN_LINK = /\[([^\]]*)\]\(([^)]+)\)/g;
  * @returns The visible file name.
  */
 function linkFileName(target: string): string {
-    let path = target;
-    try {
-        path = decodeURIComponent(path);
-    } catch {
-        // Keep the raw target when it is not valid percent encoding.
-    }
-    path = path.split("#")[0].split("?")[0];
-    const slash = path.lastIndexOf("/");
-    if (slash >= 0) path = path.slice(slash + 1);
-    return path.replace(/\.md$/i, "");
+	let path = target;
+	try {
+		path = decodeURIComponent(path);
+	} catch {
+		// Keep the raw target when it is not valid percent encoding.
+	}
+	path = path.split("#")[0].split("?")[0];
+	const slash = path.lastIndexOf("/");
+	if (slash >= 0) path = path.slice(slash + 1);
+	return path.replace(/\.md$/i, "");
 }
 
 /**
@@ -35,13 +35,13 @@ function linkFileName(target: string): string {
  * @returns The display text, or the target file name.
  */
 function replaceWikiLink(
-    _match: string,
-    target: string,
-    display?: string,
+	_match: string,
+	target: string,
+	display?: string,
 ): string {
-    const label = display?.trim();
-    if (label) return label;
-    return linkFileName(target);
+	const label = display?.trim();
+	if (label) return label;
+	return linkFileName(target);
 }
 
 /**
@@ -53,13 +53,13 @@ function replaceWikiLink(
  * @returns The label, or the URL file name.
  */
 function replaceMarkdownLink(
-    _match: string,
-    label: string,
-    url: string,
+	_match: string,
+	label: string,
+	url: string,
 ): string {
-    const text = label.trim();
-    if (text) return text;
-    return linkFileName(url);
+	const text = label.trim();
+	if (text) return text;
+	return linkFileName(url);
 }
 
 /**
@@ -73,9 +73,9 @@ function replaceMarkdownLink(
  * @returns The visible name without Markdown formatting.
  */
 export function tagNameFromMarkdown(markdown: string): string {
-    let text = markdown.replace(WIKI_LINK, replaceWikiLink);
-    text = text.replace(MARKDOWN_LINK, replaceMarkdownLink);
-    return text.replace(/[*_~`]/g, "").trim();
+	let text = markdown.replace(WIKI_LINK, replaceWikiLink);
+	text = text.replace(MARKDOWN_LINK, replaceMarkdownLink);
+	return text.replace(/[*_~`]/g, "").trim();
 }
 
 /**
@@ -88,8 +88,8 @@ export function tagNameFromMarkdown(markdown: string): string {
  * @returns A CSS color variable name, such as `--color-blue`.
  */
 export function tagColorVariable(markdown: string): string {
-    const name = tagNameFromMarkdown(markdown).toLowerCase();
-    return hashColorVariable(name);
+	const name = tagNameFromMarkdown(markdown).toLowerCase();
+	return hashColorVariable(name);
 }
 
 /**
@@ -102,14 +102,14 @@ export function tagColorVariable(markdown: string): string {
  * @returns The raw tag texts, one for each visible name.
  */
 export function collectTagSuggestions(notes: Record<string, Note>): string[] {
-    const byName = new Map<string, string>();
-    for (const note of Object.values(notes)) {
-        for (const tag of note.tags ?? []) {
-            const name = tagNameFromMarkdown(tag);
-            if (!name) continue;
-            const key = name.toLowerCase();
-            if (!byName.has(key)) byName.set(key, tag);
-        }
-    }
-    return [...byName.values()];
+	const byName = new Map<string, string>();
+	for (const note of Object.values(notes)) {
+		for (const tag of note.tags ?? []) {
+			const name = tagNameFromMarkdown(tag);
+			if (!name) continue;
+			const key = name.toLowerCase();
+			if (!byName.has(key)) byName.set(key, tag);
+		}
+	}
+	return [...byName.values()];
 }
