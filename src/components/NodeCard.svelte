@@ -340,20 +340,28 @@
 
   function onDragPointerMove(e: PointerEvent) {
     if (!dragTracking) return;
+    // The pointer can return without a held button after a release outside the
+    // window. Do not start a drag in that case.
+    if (e.buttons === 0) {
+      stopDragTracking();
+      return;
+    }
     const dx = e.clientX - dragStartClientX;
     const dy = e.clientY - dragStartClientY;
     if (dx * dx + dy * dy > DRAG_THRESHOLD * DRAG_THRESHOLD) {
-      dragTracking = false;
+      stopDragTracking();
       ui.startDrag(noteId, ui.cursorWorldX, ui.cursorWorldY);
-      window.removeEventListener("pointermove", onDragPointerMove);
-      window.removeEventListener("pointerup", onDragPointerUp);
     }
   }
 
-  function onDragPointerUp(_e: PointerEvent) {
+  function stopDragTracking() {
     dragTracking = false;
     window.removeEventListener("pointermove", onDragPointerMove);
     window.removeEventListener("pointerup", onDragPointerUp);
+  }
+
+  function onDragPointerUp(_e: PointerEvent) {
+    stopDragTracking();
   }
 
   function commitShortEdit() {

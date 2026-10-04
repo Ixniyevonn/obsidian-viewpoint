@@ -320,6 +320,9 @@
 
   function handlePointerMove(e: PointerEvent) {
     if (!canvasRef) return;
+    // A drag can lose its pointer when the release happens outside the window.
+    // The next move then has no button held, so clear the stale drag here.
+    if (e.buttons === 0) cancelPointerInteraction();
     const world = canvasRef.clientToWorld(e.clientX, e.clientY);
     ui.updateCursor(world.x, world.y);
 
@@ -547,6 +550,42 @@
     selectedBoxKey = null;
     ui.clearSelection();
   }
+
+  /**
+   * Clear a pointer drag that lost its button.
+   *
+   * The function runs when the pointer returns without a held button, or when
+   * the window loses focus. It ends the drag without a move.
+   */
+  function cancelPointerInteraction() {
+    if (ui.isDraggingNode) {
+      ui.endDrag();
+      nodeDropGroupId = null;
+      nodeDropXStop = null;
+      nodeDropYStop = null;
+    }
+    if (draggingGroupId || groupDragTracking) {
+      draggingGroupId = null;
+      groupDragTracking = false;
+      groupDragTrackingId = null;
+      groupDragRun = null;
+      groupMoveTargetXStop = null;
+      groupMoveTargetYStop = null;
+      groupResizeAxis = null;
+      groupResizeEdge = null;
+      groupResizeTargetStop = null;
+    }
+  }
+
+  $effect(() => {
+    const cancel = () => cancelPointerInteraction();
+    window.addEventListener("blur", cancel);
+    document.addEventListener("visibilitychange", cancel);
+    return () => {
+      window.removeEventListener("blur", cancel);
+      document.removeEventListener("visibilitychange", cancel);
+    };
+  });
 
   function handlePointerUp(_e: PointerEvent) {
     if (ui.isDraggingNode && ui.draggingNodeId) {
@@ -1079,7 +1118,11 @@
   });
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window
+  onkeydown={handleKeydown}
+  onpointerup={handlePointerUp}
+  onpointercancel={() => cancelPointerInteraction()}
+/>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div

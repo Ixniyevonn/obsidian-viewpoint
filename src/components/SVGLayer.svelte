@@ -612,10 +612,17 @@
 
         window.addEventListener("pointermove", onDragMove);
         window.addEventListener("pointerup", onDragUp);
+        window.addEventListener("pointercancel", onDragUp);
     }
 
-    function onDragMove(_e: PointerEvent) {
+    function onDragMove(e: PointerEvent) {
         if (!dragBundle || !dimId) return;
+        // The pointer can return without a held button after a release outside
+        // the window. Stop the drag in that case.
+        if (e.buttons === 0) {
+            onDragUp();
+            return;
+        }
 
         const dx = ui.cursorWorldX - dragStartX;
         const dy = ui.cursorWorldY - dragStartY;
@@ -656,9 +663,10 @@
         }
     }
 
-    function onDragUp(_e: PointerEvent) {
+    function onDragUp(_e?: PointerEvent) {
         window.removeEventListener("pointermove", onDragMove);
         window.removeEventListener("pointerup", onDragUp);
+        window.removeEventListener("pointercancel", onDragUp);
         dragBundle = null;
         dragActive = false;
     }
