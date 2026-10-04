@@ -314,6 +314,104 @@ function computeGroupPlacements(
 	return placement;
 }
 
+/**
+ * Return a stable order that keeps connected groups next to each other.
+ *
+ * The function walks the group graph from the group with the most
+ * connections. Groups without a connection keep their input order.
+ *
+ * @param allGroupIds - Every group in the dimension, in input order.
+ * @param adj - The group adjacency map.
+ * @returns The group IDs in visiting order.
+ */
+function orderGroupsByConnections(
+	allGroupIds: string[],
+	adj: Map<string, Set<string>>,
+): string[] {
+	if (!allGroupIds.length) return [];
+
+	let root = allGroupIds[0];
+	let maxDegree = -1;
+	for (const id of allGroupIds) {
+		const degree = adj.get(id)?.size ?? 0;
+		if (degree > maxDegree) {
+			maxDegree = degree;
+			root = id;
+		}
+	}
+
+	const ordered: string[] = [];
+	const seen = new Set<string>();
+	const queue = [root];
+	while (queue.length) {
+		const id = queue.shift();
+		if (id === undefined) break;
+		if (seen.has(id)) continue;
+		seen.add(id);
+		ordered.push(id);
+		for (const neighbor of adj.get(id) ?? []) {
+			if (!seen.has(neighbor)) queue.push(neighbor);
+		}
+	}
+	for (const id of allGroupIds) {
+		if (!seen.has(id)) ordered.push(id);
+	}
+	return ordered;
+}
+
+/**
+ * Order the groups in each column by their connected groups.
+ *
+ * The function walks the columns from left to right. A column sorts its
+ * groups by the average position of their neighbors in the columns to the
+ * left. A group without such a neighbor keeps its place. The footprint does
+ * not change, because each column keeps the same groups.
+ *
+ * @param columns - The groups of each column. The function mutates it.
+ * @param adj - The group adjacency map.
+ */
+export function orderColumnsByConnections(
+	columns: Map<number, string[]>,
+	adj: Map<string, Set<string>>,
+): void {
+	const sortedCols = [...columns.keys()].sort((a, b) => a - b);
+	const groupColumn = new Map<string, number>();
+	const indexInColumn = new Map<string, number>();
+	for (const [col, ids] of columns) {
+		ids.forEach((id, index) => {
+			groupColumn.set(id, col);
+			indexInColumn.set(id, index);
+		});
+	}
+
+	for (const col of sortedCols) {
+		const ids = columns.get(col);
+		if (!ids) continue;
+		const barycenter = new Map<string, number>();
+		let hasNeighbor = false;
+		for (const id of ids) {
+			const positions: number[] = [];
+			for (const neighbor of adj.get(id) ?? []) {
+				if ((groupColumn.get(neighbor) ?? col) >= col) continue;
+				const position = indexInColumn.get(neighbor);
+				if (position !== undefined) positions.push(position);
+			}
+			if (positions.length) hasNeighbor = true;
+			barycenter.set(
+				id,
+				positions.length
+					? positions.reduce((a, b) => a + b, 0) / positions.length
+					: (indexInColumn.get(id) ?? 0),
+			);
+		}
+		if (!hasNeighbor) continue;
+		ids.sort((a, b) => (barycenter.get(a) ?? 0) - (barycenter.get(b) ?? 0));
+		ids.forEach((id, index) => {
+			indexInColumn.set(id, index);
+		});
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Helper: compute group width from its members
 // ---------------------------------------------------------------------------
@@ -511,6 +609,10 @@ export function layoutEngine(
 		ids.sort((a, b) => placements.get(a)!.row - placements.get(b)!.row);
 	}
 
+	const sortedCols = [...columns.keys()].sort((a, b) => a - b);
+
+	orderColumnsByConnections(columns, adj);
+
 	// Find widest group in each column
 	const colMaxWidth = new Map<number, number>();
 	for (const [col, groupIds] of columns) {
@@ -524,8 +626,6 @@ export function layoutEngine(
 		}
 		colMaxWidth.set(col, maxW);
 	}
-
-	const sortedCols = [...columns.keys()].sort((a, b) => a - b);
 
 	const colXOffset = new Map<number, number>();
 	let xAccum = 0;
@@ -720,6 +820,25 @@ function layoutWithSpectra(
 		});
 	}
 
+	// Process connected groups one after another, so their boxes stack next to
+	// each other. The stable order keeps disconnected groups as they are.
+	const resolvedIds = resolved.map((group) => group.id);
+	const groupAdjacency = buildGroupAdjacency(
+		getConnectionsForDimension(project, dimId),
+		project.notes,
+		dimId,
+		new Set(resolvedIds),
+	);
+	const groupOrder = new Map(
+		orderGroupsByConnections(resolvedIds, groupAdjacency).map((id, index) => [
+			id,
+			index,
+		]),
+	);
+	resolved.sort(
+		(a, b) => (groupOrder.get(a.id) ?? 0) - (groupOrder.get(b.id) ?? 0),
+	);
+
 	// Vertical packing. A single-row box takes the lowest free span in its
 	// columns. A multi-row box claims its cells and stays exclusive.
 	const blockedCells = new Set<string>();
@@ -759,35 +878,45 @@ function layoutWithSpectra(
 	}
 
 	/**
-	 * Return the lowest offset where a box of the given height fits.
+	 * Return the lowest offset where every run fits in a row.
 	 *
-	 * The function looks only at the columns that the box covers. Each placed
-	 * box keeps its span plus one group gap, so the new box cannot touch it.
+	 * Runs of one group never overlap in columns. The function gives them one
+	 * offset, so the box chunks of a complex group start on the same line.
 	 *
 	 * @param row - The row index.
-	 * @param xFrom - The first column of the new box.
-	 * @param xTo - The last column of the new box.
-	 * @param height - The height of the new box.
-	 * @returns The lowest free offset from the row top.
+	 * @param runs - The horizontal runs of one group in this row.
+	 * @param group - The group that owns the runs.
+	 * @returns The lowest shared free offset from the row top.
 	 */
-	function offsetFreeLowest(
+	function offsetFreeForRuns(
 		row: number,
-		xFrom: number,
-		xTo: number,
-		height: number,
+		runs: GroupRun[],
+		group: ResolvedGroup,
 	): number {
 		const boxes = rowBoxes.get(row);
 		if (!boxes || boxes.length === 0) return 0;
-		const barriers = boxes
-			.filter((box) => box.xTo >= xFrom && box.xFrom <= xTo)
-			.sort((a, b) => a.top - b.top);
-		let offset = 0;
-		for (const box of barriers) {
-			if (offset + height <= box.top) break;
-			const end = box.bottom + groupGap;
-			if (end > offset) offset = end;
+
+		const candidates = new Set<number>([0]);
+		for (const box of boxes) {
+			if (runs.some((run) => box.xTo >= run.xFrom && box.xFrom <= run.xTo)) {
+				candidates.add(box.bottom + groupGap);
+			}
 		}
-		return offset;
+		const sorted = [...candidates].sort((a, b) => a - b);
+		for (const offset of sorted) {
+			const fits = runs.every((run) => {
+				const height = runContentHeight(group, run);
+				return !boxes.some(
+					(box) =>
+						box.xTo >= run.xFrom &&
+						box.xFrom <= run.xTo &&
+						offset < box.bottom + groupGap &&
+						offset + height > box.top,
+				);
+			});
+			if (fits) return offset;
+		}
+		return sorted[sorted.length - 1];
 	}
 
 	/** Return true when a placed box covers one cell. */
@@ -803,6 +932,7 @@ function layoutWithSpectra(
 		const addedRuns: string[] = [];
 		const addedBoxes: PlacedBox[] = [];
 		let conflict = false;
+		const horizontalByRow = new Map<number, GroupRun[]>();
 
 		for (const run of group.runs) {
 			if (run.yFrom === run.yTo) {
@@ -813,18 +943,9 @@ function layoutWithSpectra(
 					}
 				}
 				if (conflict) break;
-				const height = runContentHeight(group, run);
-				const offset = offsetFreeLowest(run.yFrom, run.xFrom, run.xTo, height);
-				const key = runKey(group, run);
-				runOffset.set(key, offset);
-				addedRuns.push(key);
-				addedBoxes.push({
-					row: run.yFrom,
-					xFrom: run.xFrom,
-					xTo: run.xTo,
-					top: offset,
-					bottom: offset + height,
-				});
+				const list = horizontalByRow.get(run.yFrom) ?? [];
+				list.push(run);
+				horizontalByRow.set(run.yFrom, list);
 			} else {
 				for (const cell of run.cells) {
 					const key = indexCellKey(cell.yi, cell.xi);
@@ -847,6 +968,22 @@ function layoutWithSpectra(
 			for (const key of addedBlocked) blockedCells.delete(key);
 			for (const key of addedRuns) runOffset.delete(key);
 			continue;
+		}
+
+		for (const [row, runs] of horizontalByRow) {
+			const offset = offsetFreeForRuns(row, runs, group);
+			for (const run of runs) {
+				const key = runKey(group, run);
+				runOffset.set(key, offset);
+				addedRuns.push(key);
+				addedBoxes.push({
+					row,
+					xFrom: run.xFrom,
+					xTo: run.xTo,
+					top: offset,
+					bottom: offset + runContentHeight(group, run),
+				});
+			}
 		}
 
 		for (const box of addedBoxes) {

@@ -39,11 +39,13 @@ Download `main.js`, `manifest.json`, and `styles.css` from the same [GitHub rele
 
 The layout controls node positions. Nodes form a vertical list inside each group. Notes without a group appear in an Ungrouped container.
 
-Without spectra, connections between groups determine their arrangement in rows and columns. Groups without connections use a horizontal row.
+Without spectra, connections between groups determine their arrangement in rows and columns. The layout places connected groups close to each other. Groups without connections use a horizontal row.
 
 A dimension can define an X-spectrum, a Y-spectrum, or the two spectra together. Groups use named stops on each active spectrum. The layout adjusts spacing to fit the content.
 
 A group is present in one or more cells. Each cell pairs a stop on the X-spectrum with a stop on the Y-spectrum. Cells that touch merge into one box. A group present in more than one cell gets a color from its name. The same name gives the same color. A duplicate name in one dimension gets its own color.
+
+Detached chunks of one complex group stay on one line.
 
 To choose a color, click the colored dot on the group. The popover shows 16 theme colors: each hue has a normal tone and a soft tone. Choose **Automatic** to use the name color. Choose **Custom color** to select your own color.
 

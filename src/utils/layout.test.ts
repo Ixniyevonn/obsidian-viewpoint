@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { Group, GroupCell, Note, ProjectData } from "../types";
-import { layoutEngine } from "./layout";
+import { layoutEngine, orderColumnsByConnections } from "./layout";
 
 // pretext measures text with a canvas context. Bun has no canvas, so use a
 // fixed-width stub for the layout tests.
@@ -89,6 +89,35 @@ test("a detached cell set makes one box for each run", () => {
 	);
 	expect(layout.groups.span.complex).toBe(true);
 	expect(layout.groups.point.complex).toBe(false);
+});
+
+test("detached chunks of one group align on one line", () => {
+	const layout = layoutEngine(
+		makeProject([
+			{ id: "point", name: "Point", cells: [cell("a")] },
+			{ id: "span", name: "Span", cells: [cell("a"), cell("c")] },
+		]),
+		"d",
+	);
+	const spanBoxes = layout.groupBoxes.filter((box) => box.groupId === "span");
+	expect(spanBoxes.length).toBe(2);
+	expect(spanBoxes[0].y).toBe(spanBoxes[1].y);
+});
+
+test("connected groups order by their neighbors in the left column", () => {
+	const columns = new Map<number, string[]>([
+		[0, ["b", "a"]],
+		[1, ["x", "y"]],
+	]);
+	const adj = new Map<string, Set<string>>([
+		["a", new Set(["x"])],
+		["b", new Set(["y"])],
+		["x", new Set(["a"])],
+		["y", new Set(["b"])],
+	]);
+	orderColumnsByConnections(columns, adj);
+	expect(columns.get(0)).toEqual(["b", "a"]);
+	expect(columns.get(1)).toEqual(["y", "x"]);
 });
 
 test("two point groups in one cell stack", () => {
