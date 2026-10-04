@@ -130,6 +130,22 @@ test("a single-row span keeps its own height in a tall row", () => {
     expect(spanBox!.height).toBeLessThan(pointBox!.height);
 });
 
+test("a chain of complex groups fills the free space above them", () => {
+    const layout = layoutEngine(
+        makeProject([
+            { id: "A", name: "A", cells: [cell("a")] },
+            { id: "AB", name: "AB", cells: [cell("a"), cell("b")] },
+            { id: "BC", name: "BC", cells: [cell("b"), cell("c")] },
+            { id: "C", name: "C", cells: [cell("c")] },
+        ]),
+        "d",
+    );
+    // A and BC share the top level. AB and C share the next level.
+    expect(layout.groups.AB.y).toBe(layout.groups.C.y);
+    expect(layout.groups.BC.y).toBe(layout.groups.A.y);
+    expect(layout.groups.AB.y).toBeGreaterThan(layout.groups.A.y);
+});
+
 test("an explicit color wins and duplicate names differ", () => {
     const layout = layoutEngine(
         makeProject([

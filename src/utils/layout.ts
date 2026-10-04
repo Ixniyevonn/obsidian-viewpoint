@@ -703,11 +703,20 @@ function layoutWithSpectra(
         });
     }
 
-    // Vertical packing. A single-row box stacks in its columns. A multi-row
-    // box claims its cells and stays exclusive.
+    // Vertical packing. A single-row box takes the lowest free span in its
+    // columns. A multi-row box claims its cells and stays exclusive.
     const blockedCells = new Set<string>();
-    const rowCursor = new Map<string, number>();
+    const rowBoxes = new Map<number, PlacedBox[]>();
     const runOffset = new Map<string, number>();
+
+    /** One box that the packing already placed in a row. */
+    interface PlacedBox {
+        row: number;
+        xFrom: number;
+        xTo: number;
+        top: number;
+        bottom: number;
+    }
 
     function cellMembers(group: ResolvedGroup, c: number, r: number): string[] {
         return group.membersByCell.get(indexCellKey(c, r)) ?? [];
@@ -732,55 +741,106 @@ function layoutWithSpectra(
         return LABEL_H + groupPadding * 2 + top;
     }
 
+    /**
+     * Return the lowest offset where a box of the given height fits.
+     *
+     * The function looks only at the columns that the box covers. Each placed
+     * box keeps its span plus one group gap, so the new box cannot touch it.
+     *
+     * @param row - The row index.
+     * @param xFrom - The first column of the new box.
+     * @param xTo - The last column of the new box.
+     * @param height - The height of the new box.
+     * @returns The lowest free offset from the row top.
+     */
+    function offsetFreeLowest(
+        row: number,
+        xFrom: number,
+        xTo: number,
+        height: number,
+    ): number {
+        const boxes = rowBoxes.get(row);
+        if (!boxes || boxes.length === 0) return 0;
+        const barriers = boxes
+            .filter((box) => box.xTo >= xFrom && box.xFrom <= xTo)
+            .sort((a, b) => a.top - b.top);
+        let offset = 0;
+        for (const box of barriers) {
+            if (offset + height <= box.top) break;
+            const end = box.bottom + groupGap;
+            if (end > offset) offset = end;
+        }
+        return offset;
+    }
+
+    /** Return true when a placed box covers one cell. */
+    function cellTaken(row: number, col: number): boolean {
+        const boxes = rowBoxes.get(row);
+        if (!boxes) return false;
+        return boxes.some((box) => box.xFrom <= col && col <= box.xTo);
+    }
+
     for (const group of resolved) {
         if (!group.placed) continue;
+        const addedBlocked: string[] = [];
+        const addedRuns: string[] = [];
+        const addedBoxes: PlacedBox[] = [];
+        let conflict = false;
+
         for (const run of group.runs) {
             if (run.yFrom === run.yTo) {
-                let conflict = false;
                 for (const cell of run.cells) {
                     if (blockedCells.has(indexCellKey(cell.yi, cell.xi))) {
                         conflict = true;
+                        break;
                     }
                 }
-                if (conflict) {
-                    group.placed = false;
-                    break;
-                }
-                let offset = 0;
-                for (const cell of run.cells) {
-                    offset = Math.max(
-                        offset,
-                        rowCursor.get(indexCellKey(cell.yi, cell.xi)) ?? 0,
-                    );
-                }
-                runOffset.set(runKey(group, run), offset);
-                const bottom = offset + runContentHeight(group, run) + groupGap;
-                for (const cell of run.cells) {
-                    const key = indexCellKey(cell.yi, cell.xi);
-                    rowCursor.set(
-                        key,
-                        Math.max(rowCursor.get(key) ?? 0, bottom),
-                    );
-                }
+                if (conflict) break;
+                const height = runContentHeight(group, run);
+                const offset = offsetFreeLowest(
+                    run.yFrom,
+                    run.xFrom,
+                    run.xTo,
+                    height,
+                );
+                const key = runKey(group, run);
+                runOffset.set(key, offset);
+                addedRuns.push(key);
+                addedBoxes.push({
+                    row: run.yFrom,
+                    xFrom: run.xFrom,
+                    xTo: run.xTo,
+                    top: offset,
+                    bottom: offset + height,
+                });
             } else {
-                let conflict = false;
                 for (const cell of run.cells) {
                     const key = indexCellKey(cell.yi, cell.xi);
-                    if (
-                        blockedCells.has(key) ||
-                        (rowCursor.get(key) ?? 0) > 0
-                    ) {
+                    if (blockedCells.has(key) || cellTaken(cell.yi, cell.xi)) {
                         conflict = true;
+                        break;
                     }
                 }
-                if (conflict) {
-                    group.placed = false;
-                    break;
-                }
+                if (conflict) break;
                 for (const cell of run.cells) {
-                    blockedCells.add(indexCellKey(cell.yi, cell.xi));
+                    const key = indexCellKey(cell.yi, cell.xi);
+                    blockedCells.add(key);
+                    addedBlocked.push(key);
                 }
             }
+        }
+
+        if (conflict) {
+            group.placed = false;
+            for (const key of addedBlocked) blockedCells.delete(key);
+            for (const key of addedRuns) runOffset.delete(key);
+            continue;
+        }
+
+        for (const box of addedBoxes) {
+            const boxes = rowBoxes.get(box.row);
+            if (boxes) boxes.push(box);
+            else rowBoxes.set(box.row, [box]);
         }
     }
 
@@ -800,9 +860,10 @@ function layoutWithSpectra(
     }
 
     const rowH = new Array(yStopCount).fill(LABEL_H + groupPadding * 2);
-    for (const [key, bottom] of rowCursor) {
-        const r = Number(key.split(",")[0]);
-        rowH[r] = Math.max(rowH[r], bottom - groupGap);
+    for (const [row, boxes] of rowBoxes) {
+        for (const box of boxes) {
+            rowH[row] = Math.max(rowH[row], box.bottom);
+        }
     }
     for (const group of placedGroups) {
         for (const run of group.runs) {
