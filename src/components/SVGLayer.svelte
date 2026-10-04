@@ -892,8 +892,8 @@
         height: 1px;
         overflow: visible;
         pointer-events: none;
-        /* Behind every group box and note card. */
-        z-index: -1;
+        /* Above group boxes, below note cards. DOM order sets the rest. */
+        z-index: 0;
         transition: opacity 150ms ease;
     }
 
