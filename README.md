@@ -115,6 +115,7 @@ Keyboard shortcuts below use Ctrl. The editor also accepts Cmd for selection, co
 | Edit the active dimension | Click the pencil button above the canvas. |
 | Switch dimensions | Click a dimension button, or scroll without Ctrl. |
 | Select the next or previous dimension | Use Tab or Ctrl+Tab. |
+| Hide ungrouped notes | Click the eye button above the canvas. |
 | Move a group box | Select the box, then drag its body. |
 | Reorder boxes in a row | Select the groups, then drag a box up or down inside its row. |
 | Return boxes to automatic packing | Right-click a selected box, then choose **Autosort**. |
@@ -129,7 +130,7 @@ Keyboard shortcuts below use Ctrl. The editor also accepts Cmd for selection, co
 | Redo | Use Ctrl+Shift+Z or Ctrl+Y. |
 | Cancel the current interaction | Use Esc. |
 
-The dimension switcher shows buttons for the first ten dimensions. Scrolling and Tab also reach dimensions beyond those buttons.
+The dimension switcher shows buttons for the first ten dimensions. Scrolling and Tab also reach dimensions beyond those buttons. The eye button hides or shows the notes that have no group in the active dimension. The toggle applies to the current view only.
 
 Multiple connections between the same notes share a curve. Each arrow points from the source note to the target note. Opposite connections show arrows in each direction. Deleting the curve removes all connections in that bundle.
 

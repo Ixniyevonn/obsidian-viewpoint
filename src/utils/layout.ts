@@ -127,6 +127,8 @@ export interface LayoutOptions {
 	fonts?: FontConfig;
 	/** Actual measured DOM heights keyed by noteId. Overrides estimation. */
 	measuredHeights?: Record<string, number>;
+	/** True to omit notes with no group in the active dimension. */
+	hideUngrouped?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -441,6 +443,7 @@ export function layoutEngine(
 		gridColumns = 3,
 		fonts = DEFAULT_FONTS,
 		measuredHeights = {},
+		hideUngrouped = false,
 	} = options;
 
 	const result: LayoutResult = { nodes: {}, groups: {}, groupBoxes: [] };
@@ -498,7 +501,7 @@ export function layoutEngine(
 	for (const id of noteIds) {
 		const gid = project.notes[id].membership[activeDimensionId];
 		if (gid && buckets[gid]) buckets[gid].push(id);
-		else ungrouped.push(id);
+		else if (!hideUngrouped) ungrouped.push(id);
 	}
 
 	// Apply node_order

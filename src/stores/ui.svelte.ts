@@ -8,6 +8,9 @@ export function createUiStore() {
 	let activeDimensionId = $state<string | null>(null);
 	let creatingDimension = $state(false);
 
+	// Rendering
+	let hideUngrouped = $state(false);
+
 	// Selection
 	let selectedNodeIds = $state<Set<string>>(new Set());
 	let selectedGroupIds = $state<Set<string>>(new Set());
@@ -66,6 +69,15 @@ export function createUiStore() {
 		},
 		set creatingDimension(v: boolean) {
 			creatingDimension = v;
+		},
+
+		// --- Rendering ---
+		/** True when the canvas omits notes with no group. */
+		get hideUngrouped() {
+			return hideUngrouped;
+		},
+		set hideUngrouped(v: boolean) {
+			hideUngrouped = v;
 		},
 
 		reconcile(dimensionIds: string[]) {

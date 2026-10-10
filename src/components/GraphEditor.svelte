@@ -145,6 +145,7 @@
     layoutEngine(project.project, ui.activeDimensionId, {
       fonts,
       measuredHeights,
+      hideUngrouped: ui.hideUngrouped,
     }),
   );
 
@@ -1168,7 +1169,11 @@
           },
         },
       };
-      return layoutEngine(previewProject, dimId, { fonts, measuredHeights });
+      return layoutEngine(previewProject, dimId, {
+        fonts,
+        measuredHeights,
+        hideUngrouped: ui.hideUngrouped,
+      });
     }
 
     if (ui.isDraggingNode && ui.draggingNodeId && nodeDropGroupId) {
@@ -1180,7 +1185,11 @@
         nodeDropXStop,
         nodeDropYStop,
       );
-      return layoutEngine(previewProject, dimId, { fonts, measuredHeights });
+      return layoutEngine(previewProject, dimId, {
+        fonts,
+        measuredHeights,
+        hideUngrouped: ui.hideUngrouped,
+      });
     }
 
     const cells = pendingCells;
@@ -1199,7 +1208,11 @@
         },
       },
     };
-    return layoutEngine(previewProject, dimId, { fonts, measuredHeights });
+    return layoutEngine(previewProject, dimId, {
+      fonts,
+      measuredHeights,
+      hideUngrouped: ui.hideUngrouped,
+    });
   });
 
   /** The layout to show: the drag preview while dragging, else the real one. */

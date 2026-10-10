@@ -76,6 +76,26 @@ test("a contiguous X run makes one box across its stops", () => {
 	expect(layout.nodes.n2.x).toBeLessThan(box.x + box.width);
 });
 
+test("hideUngrouped omits notes with no group and their box", () => {
+	const project = makeProject([
+		{ id: "span", name: "Span", cells: [cell("a"), cell("b"), cell("c")] },
+		{ id: "point", name: "Point", cells: [cell("d")] },
+	]);
+	project.notes.n4 = makeNote({ d: null });
+
+	const shown = layoutEngine(project, "d");
+	expect(shown.nodes.n4).toBeDefined();
+	expect(shown.groupBoxes.some((box) => box.groupId === "__ungrouped")).toBe(
+		true,
+	);
+
+	const hidden = layoutEngine(project, "d", { hideUngrouped: true });
+	expect(hidden.nodes.n4).toBeUndefined();
+	expect(hidden.groupBoxes.some((box) => box.groupId === "__ungrouped")).toBe(
+		false,
+	);
+});
+
 test("a detached cell set makes one box for each run", () => {
 	const layout = layoutEngine(
 		makeProject([
