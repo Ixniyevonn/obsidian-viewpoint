@@ -5,6 +5,7 @@
 
   interface Props {
     existing: Dimension | null;
+    otherDimensionNames: string[];
     onConfirm: (
       name: string,
       xSpectrum: Spectrum | null,
@@ -15,8 +16,14 @@
     onDelete: () => void;
   }
 
-  const { existing, onConfirm, onCancel, onDuplicate, onDelete }: Props =
-    $props();
+  const {
+    existing,
+    otherDimensionNames,
+    onConfirm,
+    onCancel,
+    onDuplicate,
+    onDelete,
+  }: Props = $props();
 
   let nameInputEl = $state<HTMLInputElement | undefined>(undefined);
 
@@ -42,8 +49,21 @@
   let dragFromIdx = $state(-1);
   let dragOverIdx = $state(-1);
 
+  let dialogEl = $state<HTMLDivElement | undefined>(undefined);
   let showDiscardConfirm = $state(false);
   let showDeleteConfirm = $state(false);
+  let wasSubmitted = $state(false);
+
+  type FieldKey =
+    | "name"
+    | "xName"
+    | "xPoleA"
+    | "xPoleB"
+    | "xStops"
+    | "yName"
+    | "yPoleA"
+    | "yPoleB"
+    | "yStops";
 
   function formSnapshot(): string {
     return JSON.stringify({
@@ -63,6 +83,41 @@
 
   const initialSnapshot = formSnapshot();
   const isDirty = $derived(formSnapshot() !== initialSnapshot);
+
+  /**
+   * Return the validation message for each incorrect field.
+   *
+   * @returns A map from field key to a message. The map is empty when the
+   * form is correct.
+   */
+  const fieldErrors = $derived.by((): Partial<Record<FieldKey, string>> => {
+    const errors: Partial<Record<FieldKey, string>> = {};
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      errors.name = "Enter a dimension name.";
+    } else if (
+      otherDimensionNames.some(
+        (other) => other.trim().toLowerCase() === trimmedName.toLowerCase(),
+      )
+    ) {
+      errors.name = "A dimension with this name already exists.";
+    }
+    if (xEnabled) {
+      if (!xName.trim()) errors.xName = "Enter a spectrum name.";
+      if (!xPoleA.trim()) errors.xPoleA = "Enter the left pole.";
+      if (!xPoleB.trim()) errors.xPoleB = "Enter the right pole.";
+      if (xStops.every((stop) => !stop.trim()))
+        errors.xStops = "Add at least one stop.";
+    }
+    if (yEnabled) {
+      if (!yName.trim()) errors.yName = "Enter a spectrum name.";
+      if (!yPoleA.trim()) errors.yPoleA = "Enter the top pole.";
+      if (!yPoleB.trim()) errors.yPoleB = "Enter the bottom pole.";
+      if (yStops.every((stop) => !stop.trim()))
+        errors.yStops = "Add at least one stop.";
+    }
+    return errors;
+  });
 
   onMount(() => nameInputEl?.focus());
 
@@ -119,9 +174,44 @@
     };
   }
 
+  /**
+   * Move the focus to the first incorrect field.
+   *
+   * @returns Nothing.
+   */
+  function focusFirstInvalid() {
+    const order: FieldKey[] = [
+      "name",
+      "xName",
+      "xPoleA",
+      "xPoleB",
+      "xStops",
+      "yName",
+      "yPoleA",
+      "yPoleB",
+      "yStops",
+    ];
+    const key = order.find((field) => field in fieldErrors);
+    if (!key) return;
+    const container = dialogEl?.querySelector<HTMLElement>(
+      `[data-field="${key}"]`,
+    );
+    if (!container) return;
+    const target = container.matches("input, textarea, select, button")
+      ? container
+      : container.querySelector<HTMLElement>(
+          "input, textarea, select, button",
+        );
+    target?.focus();
+  }
+
   function handleConfirm() {
+    wasSubmitted = true;
+    if (Object.keys(fieldErrors).length > 0) {
+      focusFirstInvalid();
+      return;
+    }
     const trimmed = name.trim();
-    if (!trimmed) return;
     const xs = buildSpectrum(xEnabled, xName, xPoleA, xPoleB, xStops);
     const ys = buildSpectrum(yEnabled, yName, yPoleA, yPoleB, yStops);
     onConfirm(trimmed, xs, ys);
@@ -204,6 +294,7 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="dialog"
+    bind:this={dialogEl}
     onclick={(e) => e.stopPropagation()}
   >
     <div class="dialog-header">
@@ -232,8 +323,17 @@
         bind:this={nameInputEl}
         bind:value={name}
         class="field-input"
+        class:invalid={wasSubmitted && fieldErrors.name}
+        data-field="name"
+        aria-invalid={wasSubmitted && fieldErrors.name ? "true" : undefined}
+        aria-describedby={wasSubmitted && fieldErrors.name
+          ? "name-error"
+          : undefined}
         placeholder="Dimension name…"
       />
+      {#if wasSubmitted && fieldErrors.name}
+        <span id="name-error" class="field-error">{fieldErrors.name}</span>
+      {/if}
     </label>
 
     <!-- X Spectrum -->
@@ -250,8 +350,14 @@
             <input
               bind:value={xName}
               class="field-input"
+              class:invalid={wasSubmitted && fieldErrors.xName}
+              data-field="xName"
+              aria-invalid={wasSubmitted && fieldErrors.xName ? "true" : undefined}
               placeholder="e.g. Scale"
             />
+            {#if wasSubmitted && fieldErrors.xName}
+              <span class="field-error">{fieldErrors.xName}</span>
+            {/if}
           </label>
           <div class="poles-row">
             <label class="field pole">
@@ -259,8 +365,16 @@
               <input
                 bind:value={xPoleA}
                 class="field-input"
+                class:invalid={wasSubmitted && fieldErrors.xPoleA}
+                data-field="xPoleA"
+                aria-invalid={wasSubmitted && fieldErrors.xPoleA
+                  ? "true"
+                  : undefined}
                 placeholder="e.g. Individual"
               />
+              {#if wasSubmitted && fieldErrors.xPoleA}
+                <span class="field-error">{fieldErrors.xPoleA}</span>
+              {/if}
             </label>
             <span class="pole-arrow pole-arrow-x" aria-hidden="true">
               <svg aria-hidden="true" viewBox="0 0 24 12" width="24" height="12">
@@ -274,44 +388,58 @@
               <input
                 bind:value={xPoleB}
                 class="field-input"
+                class:invalid={wasSubmitted && fieldErrors.xPoleB}
+                data-field="xPoleB"
+                aria-invalid={wasSubmitted && fieldErrors.xPoleB
+                  ? "true"
+                  : undefined}
                 placeholder="e.g. Collective"
               />
+              {#if wasSubmitted && fieldErrors.xPoleB}
+                <span class="field-error">{fieldErrors.xPoleB}</span>
+              {/if}
             </label>
           </div>
-          <div class="stops-section">
+          <div class="stops-section" data-field="xStops">
             <span class="field-label">Stops (ordered left → right)</span>
-            {#each xStops as stop, i}
-              <div
-                class="stop-row"
-                class:drag-over={dragAxis === "x" &&
-                  dragOverIdx === i &&
-                  dragFromIdx !== i}
-                ondragover={(e) => handleDragOver(e, i)}
-                ondrop={(e) => handleDrop(e, "x", i)}
-              >
-                <span
-                  class="drag-handle"
-                  title="Drag to reorder"
-                  draggable="true"
-                  ondragstart={() => handleDragStart("x", i)}
-                  ondragend={handleDragEnd}>⠿</span
+            <div class="stop-list">
+              {#each xStops as stop, i}
+                <div
+                  class="stop-row"
+                  class:drag-over={dragAxis === "x" &&
+                    dragOverIdx === i &&
+                    dragFromIdx !== i}
+                  ondragover={(e) => handleDragOver(e, i)}
+                  ondrop={(e) => handleDrop(e, "x", i)}
                 >
-                <input
-                  class="field-input stop-input"
-                  draggable="false"
-                  value={stop}
-                  oninput={(e) =>
-                    updateStop("x", i, (e.target as HTMLInputElement).value)}
-                  placeholder={`Stop ${i + 1}`}
-                />
-                <button type="button"
-                  class="stop-remove"
-                  onclick={() => removeStop("x", i)}
-                  title="Remove stop"
-                  disabled={xStops.length <= 1}>×</button
-                >
-              </div>
-            {/each}
+                  <span
+                    class="drag-handle"
+                    title="Drag to reorder"
+                    draggable="true"
+                    ondragstart={() => handleDragStart("x", i)}
+                    ondragend={handleDragEnd}>⠿</span
+                  >
+                  <input
+                    class="field-input stop-input"
+                    class:invalid={wasSubmitted && fieldErrors.xStops}
+                    draggable="false"
+                    value={stop}
+                    oninput={(e) =>
+                      updateStop("x", i, (e.target as HTMLInputElement).value)}
+                    placeholder={`Stop ${i + 1}`}
+                  />
+                  <button type="button"
+                    class="stop-remove"
+                    onclick={() => removeStop("x", i)}
+                    title="Remove stop"
+                    disabled={xStops.length <= 1}>×</button
+                  >
+                </div>
+              {/each}
+              {#if wasSubmitted && fieldErrors.xStops}
+                <span class="field-error">{fieldErrors.xStops}</span>
+              {/if}
+            </div>
             <button type="button" class="stop-add" onclick={() => addStop("x")}
               >+ Add stop</button
             >
@@ -334,8 +462,14 @@
             <input
               bind:value={yName}
               class="field-input"
+              class:invalid={wasSubmitted && fieldErrors.yName}
+              data-field="yName"
+              aria-invalid={wasSubmitted && fieldErrors.yName ? "true" : undefined}
               placeholder="e.g. Complexity"
             />
+            {#if wasSubmitted && fieldErrors.yName}
+              <span class="field-error">{fieldErrors.yName}</span>
+            {/if}
           </label>
           <div class="poles-row">
             <label class="field pole">
@@ -343,8 +477,16 @@
               <input
                 bind:value={yPoleA}
                 class="field-input"
+                class:invalid={wasSubmitted && fieldErrors.yPoleA}
+                data-field="yPoleA"
+                aria-invalid={wasSubmitted && fieldErrors.yPoleA
+                  ? "true"
+                  : undefined}
                 placeholder="e.g. Simple"
               />
+              {#if wasSubmitted && fieldErrors.yPoleA}
+                <span class="field-error">{fieldErrors.yPoleA}</span>
+              {/if}
             </label>
             <span class="pole-arrow pole-arrow-y" aria-hidden="true">
               <svg aria-hidden="true" viewBox="0 0 12 24" width="12" height="24">
@@ -358,44 +500,58 @@
               <input
                 bind:value={yPoleB}
                 class="field-input"
+                class:invalid={wasSubmitted && fieldErrors.yPoleB}
+                data-field="yPoleB"
+                aria-invalid={wasSubmitted && fieldErrors.yPoleB
+                  ? "true"
+                  : undefined}
                 placeholder="e.g. Complex"
               />
+              {#if wasSubmitted && fieldErrors.yPoleB}
+                <span class="field-error">{fieldErrors.yPoleB}</span>
+              {/if}
             </label>
           </div>
-          <div class="stops-section">
+          <div class="stops-section" data-field="yStops">
             <span class="field-label">Stops (ordered top → bottom)</span>
-            {#each yStops as stop, i}
-              <div
-                class="stop-row"
-                class:drag-over={dragAxis === "y" &&
-                  dragOverIdx === i &&
-                  dragFromIdx !== i}
-                ondragover={(e) => handleDragOver(e, i)}
-                ondrop={(e) => handleDrop(e, "y", i)}
-              >
-                <span
-                  class="drag-handle"
-                  title="Drag to reorder"
-                  draggable="true"
-                  ondragstart={() => handleDragStart("y", i)}
-                  ondragend={handleDragEnd}>⠿</span
+            <div class="stop-list">
+              {#each yStops as stop, i}
+                <div
+                  class="stop-row"
+                  class:drag-over={dragAxis === "y" &&
+                    dragOverIdx === i &&
+                    dragFromIdx !== i}
+                  ondragover={(e) => handleDragOver(e, i)}
+                  ondrop={(e) => handleDrop(e, "y", i)}
                 >
-                <input
-                  class="field-input stop-input"
-                  draggable="false"
-                  value={stop}
-                  oninput={(e) =>
-                    updateStop("y", i, (e.target as HTMLInputElement).value)}
-                  placeholder={`Stop ${i + 1}`}
-                />
-                <button type="button"
-                  class="stop-remove"
-                  onclick={() => removeStop("y", i)}
-                  title="Remove stop"
-                  disabled={yStops.length <= 1}>×</button
-                >
-              </div>
-            {/each}
+                  <span
+                    class="drag-handle"
+                    title="Drag to reorder"
+                    draggable="true"
+                    ondragstart={() => handleDragStart("y", i)}
+                    ondragend={handleDragEnd}>⠿</span
+                  >
+                  <input
+                    class="field-input stop-input"
+                    class:invalid={wasSubmitted && fieldErrors.yStops}
+                    draggable="false"
+                    value={stop}
+                    oninput={(e) =>
+                      updateStop("y", i, (e.target as HTMLInputElement).value)}
+                    placeholder={`Stop ${i + 1}`}
+                  />
+                  <button type="button"
+                    class="stop-remove"
+                    onclick={() => removeStop("y", i)}
+                    title="Remove stop"
+                    disabled={yStops.length <= 1}>×</button
+                  >
+                </div>
+              {/each}
+              {#if wasSubmitted && fieldErrors.yStops}
+                <span class="field-error">{fieldErrors.yStops}</span>
+              {/if}
+            </div>
             <button type="button" class="stop-add" onclick={() => addStop("y")}
               >+ Add stop</button
             >
@@ -406,11 +562,7 @@
 
     <div class="dialog-actions">
       <button type="button" class="btn-cancel" onclick={requestClose}>Cancel</button>
-      <button type="button"
-        class="btn-confirm"
-        onclick={handleConfirm}
-        disabled={!name.trim()}
-      >
+      <button type="button" class="btn-confirm" onclick={handleConfirm}>
         {existing ? "Save" : "Create"}
       </button>
     </div>
@@ -546,10 +698,11 @@
   }
 
   .field {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 4px;
-    margin-bottom: 12px;
+    margin-bottom: 16px;
   }
 
   .field-label {
@@ -572,6 +725,24 @@
   }
   .field-input:focus {
     border-color: var(--interactive-accent);
+  }
+  .field-input.invalid {
+    border-color: var(--text-error);
+  }
+  .field-input.invalid:focus {
+    border-color: var(--text-error);
+  }
+
+  .field-error {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: 2px;
+    font-size: var(--font-ui-smaller, var(--font-ui-small));
+    line-height: 1.2;
+    color: var(--text-error);
+    pointer-events: none;
   }
 
   .spectrum-section {
@@ -602,12 +773,13 @@
     display: flex;
     align-items: flex-end;
     gap: 8px;
-    margin-bottom: 12px;
+    margin-bottom: 16px;
   }
 
   .pole {
     flex: 1;
     min-width: 0;
+    margin-bottom: 12px;
   }
 
   .pole-arrow {
@@ -638,6 +810,14 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+  }
+
+  .stop-list {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
   }
 
   .stop-row {

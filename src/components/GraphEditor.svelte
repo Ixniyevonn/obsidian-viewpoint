@@ -927,6 +927,12 @@
       : null,
   );
 
+  const dialogOtherDimensionNames: string[] = $derived(
+    Object.entries(project.project.dimensions)
+      .filter(([id]) => !(dialogMode === "edit" && id === ui.activeDimensionId))
+      .map(([, dimension]) => dimension.name),
+  );
+
   // --- Clipboard ---
 
   /**
@@ -1563,6 +1569,7 @@
 {#if dialogMode}
   <DimensionDialog
     existing={dialogExisting}
+    otherDimensionNames={dialogOtherDimensionNames}
     onConfirm={handleDialogConfirm}
     onCancel={handleDialogCancel}
     onDuplicate={handleDialogDuplicate}
