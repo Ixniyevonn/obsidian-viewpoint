@@ -61,6 +61,7 @@
   const compact = $derived(detail === "compact");
 
   const isSelected = $derived(ui.isSelected(noteId));
+  const isAttention = $derived(ui.attentionNodeId === noteId);
   const isFocused = $derived(
     ui.focusPrimaryId === noteId || ui.focusSecondaryId === noteId,
   );
@@ -453,7 +454,9 @@
     ? ' dragging'
     : ''}{preview ? ' preview' : ''}{preview && isBeingDragged
     ? ' preview-active'
-    : ''}{isChainDimmed ? ' chain-dim' : ''}{tagDim ? ' tag-dim' : ''}"
+    : ''}{isChainDimmed ? ' chain-dim' : ''}{tagDim
+    ? ' tag-dim'
+    : ''}{isAttention ? ' attention' : ''}"
   onclick={handleClick}
   ondblclick={handleDblClick}
   oncontextmenu={handleContextMenu}
@@ -725,6 +728,21 @@
     box-shadow:
       var(--shadow-stationary),
       0 0 0 2px var(--color-yellow);
+  }
+
+  /* A note that the editor reveals. It looks like a validation error. */
+  :global(.node-card.attention) {
+    outline: 2px solid var(--text-error);
+    outline-offset: -2px;
+    background-color: color-mix(
+      in srgb,
+      var(--text-error) 8%,
+      var(--background-primary)
+    );
+    box-shadow:
+      var(--shadow-stationary),
+      0 0 0 2px var(--text-error);
+    z-index: 6;
   }
 
   :global(.node-card.selected.focused) {

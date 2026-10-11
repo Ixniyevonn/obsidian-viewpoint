@@ -845,6 +845,69 @@
     }
   }
 
+  /**
+   * Reveal a note in another dimension.
+   *
+   * The function switches the active dimension, marks the note for attention,
+   * and centers the canvas on the note.
+   *
+   * @param noteId - The note to reveal.
+   * @param dimensionId - The dimension that holds the note in a group.
+   */
+  function revealNoteInDimension(noteId: string, dimensionId: string) {
+    ui.activeDimensionId = dimensionId;
+    ui.clearTagFilters();
+    ui.setAttentionNode(noteId);
+    const pos = layout.nodes[noteId];
+    if (!pos) return;
+    requestAnimationFrame(() => {
+      canvasRef?.panTo(pos.x + pos.width / 2, pos.y + pos.height / 2);
+    });
+  }
+
+  /**
+   * Delete the selected notes with dimension-aware rules.
+   *
+   * The function ungroups a note in a group of the active dimension. A note
+   * with no group here but a group in another dimension switches to that
+   * dimension. The function removes a note with no group in every dimension.
+   */
+  function deleteSelectedNotes() {
+    const dimId = ui.activeDimensionId;
+    const toRemove: string[] = [];
+    const toUngroup: string[] = [];
+    let revealNoteId: string | null = null;
+    let revealDimId: string | null = null;
+
+    for (const id of ui.selectedNodeIds) {
+      const note = project.project.notes[id];
+      if (!note) continue;
+      if (dimId && note.membership[dimId]) {
+        toUngroup.push(id);
+        continue;
+      }
+      const otherDimId = Object.keys(note.membership).find(
+        (other) => other !== dimId && note.membership[other],
+      );
+      if (otherDimId) {
+        if (!revealNoteId) {
+          revealNoteId = id;
+          revealDimId = otherDimId;
+        }
+        continue;
+      }
+      toRemove.push(id);
+    }
+
+    if (toRemove.length) project.removeNotes(toRemove);
+    if (dimId && toUngroup.length) {
+      project.removeNotesFromGroup(toUngroup, dimId);
+    }
+    if (revealNoteId && revealDimId) {
+      revealNoteInDimension(revealNoteId, revealDimId);
+    }
+  }
+
   // --- Dimension dialog ---
 
   function handleOpenDialog(mode: "create" | "edit") {
@@ -1111,11 +1174,12 @@
       }
       if (ui.hasSelection) {
         e.preventDefault();
+        const dimId = ui.activeDimensionId;
         if (ui.selectedNodeIds.size > 0) {
-          project.removeNotes([...ui.selectedNodeIds]);
+          deleteSelectedNotes();
         }
-        if (ui.activeDimensionId && ui.selectedGroupIds.size > 0) {
-          project.removeGroups(ui.activeDimensionId, [...ui.selectedGroupIds]);
+        if (dimId && ui.selectedGroupIds.size > 0) {
+          project.removeGroups(dimId, [...ui.selectedGroupIds]);
         }
         ui.clearSelection();
         selectedBoxKeys = new Set();

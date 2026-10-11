@@ -19,6 +19,9 @@ export function createUiStore() {
 	let focusPrimaryId = $state<string | null>(null);
 	let focusSecondaryId = $state<string | null>(null);
 
+	// Attention. One note that the editor reveals and marks like a validation.
+	let attentionNodeId = $state<string | null>(null);
+
 	// Connection creation mode
 	let connectingFromId = $state<string | null>(null);
 
@@ -109,6 +112,7 @@ export function createUiStore() {
 		},
 
 		selectNode(id: string, additive: boolean) {
+			attentionNodeId = null;
 			if (additive) {
 				const next = new Set(selectedNodeIds);
 				if (next.has(id)) next.delete(id);
@@ -164,11 +168,13 @@ export function createUiStore() {
 		},
 
 		setFocus(id: string) {
+			attentionNodeId = null;
 			focusPrimaryId = id;
 			focusSecondaryId = null;
 		},
 
 		setDualFocus(id: string) {
+			attentionNodeId = null;
 			if (!focusPrimaryId || focusPrimaryId === id) {
 				focusPrimaryId = id;
 				focusSecondaryId = null;
@@ -178,8 +184,20 @@ export function createUiStore() {
 		},
 
 		clearFocus() {
+			attentionNodeId = null;
 			focusPrimaryId = null;
 			focusSecondaryId = null;
+		},
+
+		// --- Attention ---
+		/** The note that the editor reveals and marks, or null. */
+		get attentionNodeId() {
+			return attentionNodeId;
+		},
+
+		/** Mark one note for attention, or clear the mark with null. */
+		setAttentionNode(id: string | null) {
+			attentionNodeId = id;
 		},
 
 		// --- Connection creation ---
@@ -428,6 +446,7 @@ export function createUiStore() {
 			retargetOriginalId = null;
 			retargetLabel = null;
 			draggingNodeId = null;
+			attentionNodeId = null;
 		},
 
 		get isDrawingConnection() {

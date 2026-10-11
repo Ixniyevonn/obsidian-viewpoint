@@ -342,6 +342,30 @@ export function createProjectStore() {
 			notify();
 		},
 
+		/**
+		 * Remove several notes from their group in one dimension.
+		 *
+		 * The function keeps the notes and their connections in other
+		 * dimensions. It removes the placement in the given dimension.
+		 *
+		 * @param ids - The note IDs to ungroup.
+		 * @param dimensionId - The dimension to ungroup the notes in.
+		 * @returns The project data.
+		 */
+		removeNotesFromGroup(ids: string[], dimensionId: string) {
+			if (ids.length === 0) return project;
+			snap();
+			for (const id of ids) {
+				const note = project.notes[id];
+				if (!note) continue;
+				note.membership[dimensionId] = null;
+				clearNotePlacement(note, dimensionId);
+			}
+			touch();
+			notify();
+			return project;
+		},
+
 		updateNodeTitle(id: string, title: string) {
 			merge();
 			if (project.notes[id]) project.notes[id].title = title;

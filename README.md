@@ -101,7 +101,7 @@ Keyboard shortcuts below use Ctrl. The editor also accepts Cmd for selection, co
 | Restore automatic width | Double-click the right edge. |
 | Move a node to a group | Drag the node into that group. |
 | Remove a node from its group | Drag the node outside the named groups. |
-| Delete selected nodes or groups | Use Delete or Backspace. Group deletion leaves its notes ungrouped. |
+| Delete selected notes or groups | Use Delete or Backspace. |
 | Copy selected nodes | Use Ctrl+C. |
 | Cut selected nodes | Use Ctrl+X. |
 | Paste notes | Use Ctrl+V. The copies go in the group and cell under the pointer. |
@@ -135,6 +135,8 @@ Keyboard shortcuts below use Ctrl. The editor also accepts Cmd for selection, co
 The tab bar shows a tab for each dimension. The tabs wrap to a new row when the space is narrow, so the tag menu cannot cover them. Scrolling and Tab also reach every dimension. The toolbar below the tabs holds the eye button. The eye button hides or shows the notes that have no group in the active dimension. The toggle applies to the current view only.
 
 A press on a tag dims every note that does not have that tag. The unrelated groups and connections also dim. Press more tags to add them to the filter. A note stays bright when it has at least one selected tag. Press the reset button in the tag menu, or press Esc, to clear the tag filters.
+
+Delete removes only a note that has no group in every dimension. Delete ungroups a note in a group of the active dimension. A note with no group here but a group in another dimension switches to that dimension. The canvas moves the note into view and marks it with the error color. The mark clears when you select a note or press Esc. Group deletion leaves its notes ungrouped.
 
 Multiple connections between the same notes share a curve. Each arrow points from the source note to the target note. Opposite connections show arrows in each direction. Deleting the curve removes all connections in that bundle.
 
