@@ -29,6 +29,8 @@
     ui: UiStore;
     project: ProjectStore;
     preview?: boolean;
+    /** True when a tag filter dims this note. */
+    tagDim?: boolean;
     /** "compact" shows the title and a placeholder for the text. */
     detail?: "full" | "compact";
     onMeasured?: (id: string, height: number) => void;
@@ -51,6 +53,7 @@
     ui,
     project,
     preview = false,
+    tagDim = false,
     detail = "full",
     onMeasured,
   }: Props = $props();
@@ -450,7 +453,7 @@
     ? ' dragging'
     : ''}{preview ? ' preview' : ''}{preview && isBeingDragged
     ? ' preview-active'
-    : ''}{isChainDimmed ? ' chain-dim' : ''}"
+    : ''}{isChainDimmed ? ' chain-dim' : ''}{tagDim ? ' tag-dim' : ''}"
   onclick={handleClick}
   ondblclick={handleDblClick}
   oncontextmenu={handleContextMenu}
@@ -600,6 +603,12 @@
 
   /* A note outside the highlighted cluster fades back. */
   :global(.node-card.chain-dim) {
+    opacity: 0.15;
+    filter: blur(1.5px);
+  }
+
+  /* A note that does not match the tag filters fades back. */
+  :global(.node-card.tag-dim) {
     opacity: 0.15;
     filter: blur(1.5px);
   }

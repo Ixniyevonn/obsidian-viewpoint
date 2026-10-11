@@ -12,9 +12,20 @@
         ui: UiStore;
         layout: LayoutResult;
         viewRect?: ViewRect | null;
+        /** True when at least one tag filter is selected. */
+        tagFilterActive?: boolean;
+        /** The note IDs that match the selected tag filters. */
+        tagFilterNodeIds?: Set<string>;
     }
 
-    const { project, ui, layout, viewRect = null }: Props = $props();
+    const {
+        project,
+        ui,
+        layout,
+        viewRect = null,
+        tagFilterActive = false,
+        tagFilterNodeIds = new Set<string>(),
+    }: Props = $props();
 
     // --- Label editing state ---
     let editingBundleKey = $state<string | null>(null);
@@ -773,6 +784,10 @@
             ui.hasChainHighlight &&
             !(ui.chainNodeIds.has(bundle.forwardFrom) &&
                 ui.chainNodeIds.has(bundle.forwardTo))}
+        {@const tagDim =
+            tagFilterActive &&
+            !(tagFilterNodeIds.has(bundle.forwardFrom) &&
+                tagFilterNodeIds.has(bundle.forwardTo))}
         <g
             class="edge-group"
             class:pending-delete={pendingDel}
@@ -780,6 +795,7 @@
             class:strong={isStrong}
             class:chain-active={chainActive}
             class:chain-dim={chainDim}
+            class:tag-dim={tagDim}
             in:fade={{ duration: 50, delay: 50 }}
             out:fade={{ duration: 50 }}
         >
@@ -911,6 +927,12 @@
 
     /* A connection outside the highlighted cluster fades back. */
     .edge-group.chain-dim {
+        opacity: 0.1;
+        filter: blur(0.6px);
+    }
+
+    /* A connection outside the tag filters fades back. */
+    .edge-group.tag-dim {
         opacity: 0.1;
         filter: blur(0.6px);
     }

@@ -20,7 +20,7 @@
     type GroupRun,
   } from "../utils/groupStops";
   import { layoutEngine } from "../utils/layout";
-  import { collectTagSuggestions } from "../utils/tags";
+  import { collectTagSuggestions, tagNameFromMarkdown } from "../utils/tags";
   import {
     rectsIntersect,
     viewportRect,
@@ -28,7 +28,6 @@
   } from "../utils/viewport";
   import type { FontConfig } from "../utils/textMeasure";
   import { DEFAULT_FONTS, detectFonts } from "../utils/textMeasure";
-  import AxisSwitcher from "./AxisSwitcher.svelte";
   import Canvas from "./Canvas.svelte";
   import DimensionDialog from "./DimensionDialog.svelte";
   import GroupColorPopover from "./GroupColorPopover.svelte";
@@ -36,6 +35,9 @@
   import NodeGroup from "./NodeGroup.svelte";
   import SpectrumOverlay from "./SpectrumOverlay.svelte";
   import SVGLayer from "./SVGLayer.svelte";
+  import TabBar from "./TabBar.svelte";
+  import TagFilterMenu from "./TagFilterMenu.svelte";
+  import ViewToolbar from "./ViewToolbar.svelte";
 
   interface Props {
     app: App;
@@ -96,6 +98,9 @@
 
   let dialogMode = $state<"create" | "edit" | null>(null);
 
+  /** The dimension ID that the editor changes, or null. */
+  let dialogDimensionId = $state<string | null>(null);
+
   /** The dimension ID that waits for a delete confirmation, or null. */
   let dimensionDeletePendingId = $state<string | null>(null);
 
@@ -155,6 +160,22 @@
   const tagSuggestions = $derived(
     collectTagSuggestions(project.project.notes),
   );
+
+  const tagFilterActive = $derived(ui.activeTagFilters.size > 0);
+
+  const tagFilterNodeIds = $derived.by(() => {
+    const ids = new Set<string>();
+    if (ui.activeTagFilters.size === 0) return ids;
+    for (const [noteId, note] of Object.entries(project.project.notes)) {
+      for (const tag of note.tags ?? []) {
+        if (ui.activeTagFilters.has(tagNameFromMarkdown(tag).toLowerCase())) {
+          ids.add(noteId);
+          break;
+        }
+      }
+    }
+    return ids;
+  });
 
   const activeDim = $derived(
     ui.activeDimensionId
@@ -828,6 +849,17 @@
 
   function handleOpenDialog(mode: "create" | "edit") {
     dialogMode = mode;
+    dialogDimensionId = mode === "edit" ? ui.activeDimensionId : null;
+  }
+
+  /**
+   * Open the editor for one dimension without changing the active dimension.
+   *
+   * @param id - The dimension ID to edit.
+   */
+  function handleEditDimension(id: string) {
+    dialogMode = "edit";
+    dialogDimensionId = id;
   }
 
   function handleDialogConfirm(
@@ -839,14 +871,16 @@
       const id = generateId("dim");
       project.addDimension(id, name, xSpectrum, ySpectrum);
       ui.activeDimensionId = id;
-    } else if (dialogMode === "edit" && ui.activeDimensionId) {
-      project.updateDimension(ui.activeDimensionId, name, xSpectrum, ySpectrum);
+    } else if (dialogMode === "edit" && dialogDimensionId) {
+      project.updateDimension(dialogDimensionId, name, xSpectrum, ySpectrum);
     }
     dialogMode = null;
+    dialogDimensionId = null;
   }
 
   function handleDialogCancel() {
     dialogMode = null;
+    dialogDimensionId = null;
   }
 
   /**
@@ -860,19 +894,21 @@
     project.duplicateDimension(id, newId);
     ui.activeDimensionId = newId;
     dialogMode = null;
+    dialogDimensionId = null;
   }
 
-  /** Copy the active dimension and open the copy for edit. */
+  /** Copy the dimension that the editor changes. */
   function handleDialogDuplicate() {
-    if (ui.activeDimensionId) duplicateDimensionById(ui.activeDimensionId);
+    if (dialogDimensionId) duplicateDimensionById(dialogDimensionId);
   }
 
-  /** Remove the active dimension. */
+  /** Remove the dimension that the editor changes. */
   function handleDialogDelete() {
-    const dimId = ui.activeDimensionId;
+    const dimId = dialogDimensionId;
     if (!dimId) return;
     project.removeDimension(dimId);
     dialogMode = null;
+    dialogDimensionId = null;
   }
 
   /**
@@ -885,6 +921,12 @@
     e.preventDefault();
     e.stopPropagation();
     const menu = new Menu();
+    menu.addItem((item) =>
+      item
+        .setTitle("Edit dimension")
+        .setIcon("pencil")
+        .onClick(() => handleEditDimension(id)),
+    );
     menu.addItem((item) =>
       item
         .setTitle("Duplicate dimension")
@@ -922,14 +964,14 @@
   );
 
   const dialogExisting: Dimension | null = $derived(
-    dialogMode === "edit" && ui.activeDimensionId
-      ? (project.project.dimensions[ui.activeDimensionId] ?? null)
+    dialogMode === "edit" && dialogDimensionId
+      ? (project.project.dimensions[dialogDimensionId] ?? null)
       : null,
   );
 
   const dialogOtherDimensionNames: string[] = $derived(
     Object.entries(project.project.dimensions)
-      .filter(([id]) => !(dialogMode === "edit" && id === ui.activeDimensionId))
+      .filter(([id]) => !(dialogMode === "edit" && id === dialogDimensionId))
       .map(([, dimension]) => dimension.name),
   );
 
@@ -1049,6 +1091,8 @@
         selectedBoxKeys = new Set();
       } else if (ui.hasSelection) {
         ui.clearSelection();
+      } else if (ui.hasTagFilters) {
+        ui.clearTagFilters();
       } else {
         ui.clearFocus();
       }
@@ -1425,12 +1469,19 @@
   onwheel={onWheel}
 >
   <div class="canvas-area" bind:this={canvasAreaEl}>
-    <AxisSwitcher
-      {project}
-      {ui}
-      onOpenDialog={handleOpenDialog}
-      onDimensionContextMenu={handleDimensionContextMenu}
-    />
+    <div class="canvas-top-overlay">
+      <div class="canvas-top-overlay-left">
+        <TabBar
+          {project}
+          {ui}
+          onOpenDialog={handleOpenDialog}
+          onEditDimension={handleEditDimension}
+          onDimensionContextMenu={handleDimensionContextMenu}
+        />
+        <ViewToolbar {ui} />
+      </div>
+      <TagFilterMenu tags={tagSuggestions} {ui} />
+    </div>
 
     {#if ui.connectingFromId}
       <div class="connection-hint">
@@ -1483,6 +1534,8 @@
           highlight={nodeDropGroupId === box.groupId}
           chainDim={ui.hasChainHighlight &&
             !box.memberIds.some((id) => ui.chainNodeIds.has(id))}
+          tagDim={tagFilterActive &&
+            !box.memberIds.some((id) => tagFilterNodeIds.has(id))}
           selected={selectedBoxKeys.has(boxKey(box))}
           draggable={hasSpectra &&
             box.groupId !== "__ungrouped" &&
@@ -1510,7 +1563,14 @@
         />
       {/each}
 
-      <SVGLayer {project} {ui} layout={shownLayout} {viewRect} />
+      <SVGLayer
+        {project}
+        {ui}
+        layout={shownLayout}
+        {viewRect}
+        {tagFilterActive}
+        {tagFilterNodeIds}
+      />
 
       {#each visibleNodes as [noteId, pos] (noteId)}
         <NodeCard
@@ -1531,6 +1591,7 @@
           {parentComponent}
           {ui}
           {project}
+          tagDim={tagFilterActive && !tagFilterNodeIds.has(noteId)}
           onMeasured={handleNodeMeasured}
         />
       {/each}
@@ -1643,6 +1704,27 @@
     position: relative;
     background: var(--background-primary);
     overflow: hidden;
+  }
+  .canvas-top-overlay {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    z-index: 10;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .canvas-top-overlay-left {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    pointer-events: none;
   }
   .connection-hint {
     position: absolute;

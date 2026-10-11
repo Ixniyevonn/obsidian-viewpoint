@@ -20,6 +20,8 @@
         resizableY?: boolean;
         /** True when a clicked connection dims this group. */
         chainDim?: boolean;
+        /** True when a tag filter dims this group. */
+        tagDim?: boolean;
         onContextMenu?: (e: MouseEvent) => void;
         onRename?: (newName: string) => void;
         onSelect?: (e: MouseEvent) => void;
@@ -49,6 +51,7 @@
         resizableX = false,
         resizableY = false,
         chainDim = false,
+        tagDim = false,
         onRename,
         onSelect,
         onDragStart,
@@ -156,7 +159,9 @@
         ? ' group-being-dragged'
         : ''}{color ? ' group-complex' : ''}{preview
         ? ' group-preview'
-        : ''}{chainDim ? ' group-chain-dim' : ''}"
+        : ''}{chainDim ? ' group-chain-dim' : ''}{tagDim
+        ? ' group-tag-dim'
+        : ''}"
     groupColor={color}
     oncontextmenu={(e) => onContextMenu?.(e)}
 >
@@ -262,6 +267,11 @@
     }
     /* A group outside the highlighted cluster fades back with its label. */
     :global(.node-group.group-chain-dim) {
+        opacity: 0.15;
+        filter: blur(1.5px);
+    }
+    /* A group with no note that matches the tag filters fades back. */
+    :global(.node-group.group-tag-dim) {
         opacity: 0.15;
         filter: blur(1.5px);
     }

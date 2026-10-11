@@ -34,6 +34,9 @@ export function createUiStore() {
 	let pendingDeleteDimId = $state<string | null>(null);
 	let pendingDeleteIndex = $state<number | null>(null);
 
+	// Tag filters. Each entry is a lowercase tag name.
+	let activeTagFilters = $state<Set<string>>(new Set());
+
 	// World-space cursor position
 	let cursorWorldX = $state(0);
 	let cursorWorldY = $state(0);
@@ -279,6 +282,30 @@ export function createUiStore() {
 
 		isPendingDelete(dimId: string, index: number) {
 			return pendingDeleteDimId === dimId && pendingDeleteIndex === index;
+		},
+
+		// --- Tag filters ---
+		/** The lowercase names of the selected tags. */
+		get activeTagFilters() {
+			return activeTagFilters;
+		},
+
+		/** True when at least one tag filter is selected. */
+		get hasTagFilters() {
+			return activeTagFilters.size > 0;
+		},
+
+		/** Add or remove one tag name from the filter. */
+		toggleTagFilter(name: string) {
+			const next = new Set(activeTagFilters);
+			if (next.has(name)) next.delete(name);
+			else next.add(name);
+			activeTagFilters = next;
+		},
+
+		/** Remove every tag filter. */
+		clearTagFilters() {
+			if (activeTagFilters.size > 0) activeTagFilters = new Set();
 		},
 
 		// --- Cursor ---

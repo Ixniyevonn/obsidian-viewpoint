@@ -111,11 +111,12 @@ Keyboard shortcuts below use Ctrl. The editor also accepts Cmd for selection, co
 | Change a connection endpoint | Drag the curve near that endpoint, then click the replacement node. |
 | Delete a connection bundle | Right-click its curve, then click the red curve. |
 | Highlight a connection cluster | Click its curve. Click the curve again to clear. |
-| Add a dimension | Click **+** above the canvas. |
-| Edit the active dimension | Click the pencil button above the canvas. |
-| Switch dimensions | Click a dimension button, or scroll without Ctrl. |
+| Add a dimension | Click **+** in the tab bar above the canvas. |
+| Edit a dimension | Click the pencil button in the active tab, or right-click any tab and choose **Edit dimension**. |
+| Switch dimensions | Click a dimension tab, or scroll without Ctrl. |
 | Select the next or previous dimension | Use Tab or Ctrl+Tab. |
-| Hide ungrouped notes | Click the eye button above the canvas. |
+| Hide ungrouped notes | Click the eye button in the toolbar below the tabs. |
+| Filter notes by tag | Click a tag in the tag menu at the top right. Click it again to remove that filter. |
 | Move a group box | Select the box, then drag its body. |
 | Reorder boxes in a row | Select the groups, then drag a box up or down inside its row. |
 | Return boxes to automatic packing | Right-click a selected box, then choose **Autosort**. |
@@ -130,7 +131,9 @@ Keyboard shortcuts below use Ctrl. The editor also accepts Cmd for selection, co
 | Redo | Use Ctrl+Shift+Z or Ctrl+Y. |
 | Cancel the current interaction | Use Esc. |
 
-The dimension switcher shows buttons for the first ten dimensions. Scrolling and Tab also reach dimensions beyond those buttons. The eye button hides or shows the notes that have no group in the active dimension. The toggle applies to the current view only.
+The tab bar shows a tab for each dimension. The tabs wrap to a new row when the space is narrow, so the tag menu cannot cover them. Scrolling and Tab also reach every dimension. The toolbar below the tabs holds the eye button. The eye button hides or shows the notes that have no group in the active dimension. The toggle applies to the current view only.
+
+A press on a tag dims every note that does not have that tag. The unrelated groups and connections also dim. Press more tags to add them to the filter. A note stays bright when it has at least one selected tag. Press the reset button in the tag menu, or press Esc, to clear the tag filters.
 
 Multiple connections between the same notes share a curve. Each arrow points from the source note to the target note. Opposite connections show arrows in each direction. Deleting the curve removes all connections in that bundle.
 
