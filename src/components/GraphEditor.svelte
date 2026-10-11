@@ -286,6 +286,9 @@
   function handleGroupSelect(box: GroupBoxLike, e: MouseEvent) {
     if (box.groupId === "__ungrouped") return;
     ui.clearPendingDelete();
+    // A box and a note cannot be selected together. Delete acts on the box
+    // only when no note is selected, so clear the note and group selection.
+    ui.clearSelection();
     const key = boxKey(box);
     if (e.shiftKey || e.ctrlKey || e.metaKey) {
       const next = new Set(selectedBoxKeys);
@@ -496,6 +499,7 @@
     if (!dimId) return;
     e.preventDefault();
     e.stopPropagation();
+    ui.clearSelection();
     const key = boxKey(box);
     if (!selectedBoxKeys.has(key)) selectedBoxKeys = new Set([key]);
 
