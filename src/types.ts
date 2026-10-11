@@ -21,7 +21,8 @@ export interface Group {
 	cells: GroupCell[];
 	/**
 	 * Optional explicit color. A preset key, such as `red` or `red-soft`, or a
-	 * custom CSS color, such as `#3b82f6`. Omitted for the name color.
+	 * custom CSS color, such as `#3b82f6`. Omitted for the default. A group
+	 * with more than one cell uses its name color when omitted.
 	 */
 	color?: string;
 	/**

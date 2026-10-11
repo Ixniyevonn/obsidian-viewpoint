@@ -1387,6 +1387,7 @@
           height={box.height}
           name={box.name}
           color={box.color}
+          colorable={box.groupId !== "__ungrouped"}
           preview={!!previewLayout}
           emphasis={ui.isDraggingNode}
           highlight={nodeDropGroupId === box.groupId}

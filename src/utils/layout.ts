@@ -603,10 +603,13 @@ export function layoutEngine(
 		for (const groupId of groupIds) {
 			const members =
 				groupId === "__ungrouped" ? ungrouped : buckets[groupId] || [];
-			const groupName =
+			const group =
 				groupId === "__ungrouped"
-					? "Ungrouped"
-					: (dim.groups.find((g) => g.id === groupId)?.name ?? "");
+					? undefined
+					: dim.groups.find((g) => g.id === groupId);
+			const groupName =
+				groupId === "__ungrouped" ? "Ungrouped" : (group?.name ?? "");
+			const groupColor = group?.color ? colorKeyToCss(group.color) : undefined;
 
 			const gh = placeNodesInGroup(
 				members,
@@ -627,6 +630,7 @@ export function layoutEngine(
 				height: gh,
 				name: groupName,
 				complex: false,
+				color: groupColor,
 			};
 			result.groupBoxes.push({
 				groupId,
@@ -635,6 +639,7 @@ export function layoutEngine(
 				width: gw,
 				height: gh,
 				name: groupName,
+				color: groupColor,
 				xFrom: 0,
 				xTo: 0,
 				yFrom: 0,
@@ -754,15 +759,17 @@ function layoutWithSpectra(
 		});
 	}
 
-	// Color a complex group. An explicit color wins. Otherwise the name selects
-	// the color. A duplicate auto name in one dimension gets an index.
+	// An explicit color wins for every group. A complex group without an
+	// explicit color takes a color from its name. A simple group without an
+	// explicit color stays gray. A duplicate auto name in one dimension gets
+	// an index.
 	const groupNameUses = new Map<string, number>();
 	for (const group of resolved) {
-		if (!group.complex) continue;
 		if (group.colorKey) {
 			group.color = colorKeyToCss(group.colorKey);
 			continue;
 		}
+		if (!group.complex) continue;
 		const key = group.name.trim().toLowerCase();
 		const use = (groupNameUses.get(key) ?? 0) + 1;
 		groupNameUses.set(key, use);
@@ -1117,6 +1124,7 @@ function layoutWithSpectra(
 			height: gh,
 			name: group.name,
 			complex: false,
+			color: group.color,
 		};
 		result.groupBoxes.push({
 			groupId: group.id,
@@ -1125,6 +1133,7 @@ function layoutWithSpectra(
 			width: gw,
 			height: gh,
 			name: group.name,
+			color: group.color,
 			xFrom: 0,
 			xTo: 0,
 			yFrom: 0,

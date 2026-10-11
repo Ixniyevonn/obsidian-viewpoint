@@ -43,11 +43,11 @@ Without spectra, connections between groups determine their arrangement in rows 
 
 A dimension can define an X-spectrum, a Y-spectrum, or the two spectra together. Groups use named stops on each active spectrum. The layout adjusts spacing to fit the content.
 
-A group is present in one or more cells. Each cell pairs a stop on the X-spectrum with a stop on the Y-spectrum. Cells that touch merge into one box. A group present in more than one cell gets a color from its name. The same name gives the same color. A duplicate name in one dimension gets its own color.
+A group is present in one or more cells. Each cell pairs a stop on the X-spectrum with a stop on the Y-spectrum. Cells that touch merge into one box. A group present in more than one cell gets a color from its name. The same name gives the same color. A duplicate name in one dimension gets its own color. A group present in one cell stays gray until you give it a color.
 
 Detached chunks of one complex group share one line when the space allows.
 
-To choose a color, click the colored dot on the group. The popover shows 16 theme colors: each hue has a normal tone and a soft tone. Choose **Automatic** to use the name color. Choose **Custom color** to select your own color.
+To choose a color, click the color dot on the group. The popover shows 16 theme colors: each hue has a normal tone and a soft tone. Choose **Automatic** to use the default. For a group with more than one cell, this is the name color. Choose **Custom color** to select your own color.
 
 To make a box bigger, drag a knob on its edge to the wanted stop. Select a box, then drag its body to move only that box. To place a copy in another cell, select the box, hold Shift, and drag it. Press Delete to remove the selected box. The group stays if another box remains.
 
@@ -94,7 +94,7 @@ Keyboard shortcuts below use Ctrl. The editor also accepts Cmd for selection, co
 | Rename a node or group | Double-click its title or label. |
 | Edit a short description | Double-click the description, or click the pencil icon when none exists. |
 | Add a tag | Click the plus button on the card, type a name, then press Enter. |
-| Change a group color | Click the colored dot, then pick a preset or custom color. |
+| Change a group color | Click the color dot, then pick a preset or custom color. |
 | Add an existing tag | Click a suggestion from the list, or press Tab. |
 | Remove a tag | Click the remove button on the tag. |
 | Resize a node | Drag the right edge; nearby widths in the same column snap. |

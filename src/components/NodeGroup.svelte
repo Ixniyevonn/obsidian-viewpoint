@@ -8,6 +8,8 @@
         height: number;
         name: string;
         color?: string;
+        /** True when the group accepts a color from the dot. */
+        colorable?: boolean;
         preview?: boolean;
         emphasis?: boolean;
         highlight?: boolean;
@@ -37,6 +39,7 @@
         height,
         name,
         color,
+        colorable = false,
         preview = false,
         emphasis = false,
         highlight = false,
@@ -188,7 +191,7 @@
                 onpointerdown={handleBodyPointerDown}
                 onpointermove={handleBodyPointerMove}
             >
-                {#if color}
+                {#if colorable}
                     <button
                         type="button"
                         class="group-color-dot"
@@ -393,6 +396,7 @@
         padding: 0;
         border: none;
         border-radius: 50%;
+        background-color: var(--text-faint);
         flex: 0 0 auto;
         cursor: pointer;
     }

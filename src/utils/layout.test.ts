@@ -294,3 +294,43 @@ test("an explicit color wins and duplicate names differ", () => {
 	expect(layout.groups.soft.color).toContain("color-mix(");
 	expect(layout.groups.custom.color).toBe("#123456");
 });
+
+test("a simple group takes an explicit color and stays gray without one", () => {
+	const layout = layoutEngine(
+		makeProject([
+			{ id: "span", name: "Span", cells: [cell("a"), cell("b")] },
+			{ id: "plain", name: "Plain", cells: [cell("c")] },
+			{ id: "tinted", name: "Tinted", cells: [cell("d")], color: "blue" },
+		]),
+		"d",
+	);
+	// The simple group without a color stays gray.
+	expect(layout.groups.plain.color).toBeUndefined();
+	// The simple group with an explicit color uses it.
+	expect(layout.groups.tinted.color).toBe("var(--color-blue)");
+	// The complex group still gets its name color.
+	expect(layout.groups.span.color).toBeDefined();
+});
+
+test("a group keeps an explicit color without a spectrum", () => {
+	const project: ProjectData = {
+		meta: { name: "T", created: "", modified: "" },
+		dimensions: {
+			d: {
+				name: "D",
+				groups: [
+					{ id: "g1", name: "G1", cells: [] },
+					{ id: "g2", name: "G2", cells: [], color: "red" },
+				],
+			},
+		},
+		notes: {
+			n1: makeNote({ d: "g1" }),
+			n2: makeNote({ d: "g2" }),
+		},
+		node_order: {},
+	};
+	const layout = layoutEngine(project, "d");
+	expect(layout.groups.g1.color).toBeUndefined();
+	expect(layout.groups.g2.color).toBe("var(--color-red)");
+});
