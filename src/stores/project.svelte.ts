@@ -573,6 +573,31 @@ export function createProjectStore() {
 			return project;
 		},
 
+		/**
+		 * Swap the positions of two dimensions.
+		 *
+		 * @param a - The ID of the first dimension.
+		 * @param b - The ID of the second dimension.
+		 * @returns The project data.
+		 */
+		swapDimensions(a: string, b: string) {
+			const ids = Object.keys(project.dimensions);
+			const indexA = ids.indexOf(a);
+			const indexB = ids.indexOf(b);
+			if (indexA < 0 || indexB < 0 || indexA === indexB) return project;
+			snap();
+			const next: Record<string, Dimension> = {};
+			for (const key of ids) {
+				if (key === a) next[b] = project.dimensions[b];
+				else if (key === b) next[a] = project.dimensions[a];
+				else next[key] = project.dimensions[key];
+			}
+			project.dimensions = next;
+			touch();
+			notify();
+			return project;
+		},
+
 		removeDimension(id: string) {
 			snap();
 			delete project.dimensions[id];

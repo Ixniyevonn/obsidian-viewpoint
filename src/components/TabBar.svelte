@@ -2,6 +2,7 @@
 <script lang="ts">
   import type { ProjectStore } from "../stores/project.svelte";
   import type { UiStore } from "../stores/ui.svelte";
+  import { flip } from "svelte/animate";
   import { setIcon } from "obsidian";
 
   interface Props {
@@ -23,6 +24,61 @@
   const dimIds = $derived(Object.keys(project.project.dimensions));
   const dims = $derived(project.project.dimensions);
 
+  let dragId = $state<string | null>(null);
+  let dragOverId = $state<string | null>(null);
+
+  /**
+   * Start a tab drag.
+   *
+   * @param e - The drag event.
+   * @param id - The ID of the dragged dimension.
+   */
+  function handleDragStart(e: DragEvent, id: string) {
+    dragId = id;
+    dragOverId = null;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", id);
+    }
+  }
+
+  /**
+   * Accept a drag over a tab and mark it as the drop target.
+   *
+   * @param e - The drag event.
+   * @param id - The ID of the hovered dimension.
+   */
+  function handleDragOver(e: DragEvent, id: string) {
+    if (!dragId || id === dragId) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+    dragOverId = id;
+  }
+
+  /** Clear the drop marker when the pointer leaves a tab. */
+  function handleDragLeave(id: string) {
+    if (dragOverId === id) dragOverId = null;
+  }
+
+  /**
+   * Swap the dragged dimension with the drop target.
+   *
+   * @param e - The drag event.
+   * @param id - The ID of the target dimension.
+   */
+  function handleDrop(e: DragEvent, id: string) {
+    e.preventDefault();
+    const from = dragId;
+    dragId = null;
+    dragOverId = null;
+    if (from && from !== id) project.swapDimensions(from, id);
+  }
+
+  function handleDragEnd() {
+    dragId = null;
+    dragOverId = null;
+  }
+
   /** Draw an Obsidian icon inside an element. */
   function iconAction(node: HTMLElement, icon: string) {
     setIcon(node, icon);
@@ -37,9 +93,22 @@
 <div class="tabbar">
   {#each dimIds as id (id)}
     {@const isActive = id === ui.activeDimensionId}
-    <div class="tab" class:active={isActive}>
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="tab"
+      class:active={isActive}
+      class:drag-over={dragOverId === id}
+      class:dragging={dragId === id}
+      draggable="true"
+      ondragstart={(e) => handleDragStart(e, id)}
+      ondragover={(e) => handleDragOver(e, id)}
+      ondragleave={() => handleDragLeave(id)}
+      ondrop={(e) => handleDrop(e, id)}
+      ondragend={handleDragEnd}
+      animate:flip={{ duration: 180 }}
+    >
       <button type="button"
         class="tab-label"
+        draggable="true"
         onclick={() => (ui.activeDimensionId = id)}
         oncontextmenu={(e) => onDimensionContextMenu(id, e)}
       >
@@ -100,6 +169,13 @@
     grid-template-columns: auto 1fr;
     background: var(--interactive-accent);
     border-color: var(--interactive-accent);
+  }
+  .tab.dragging {
+    opacity: 0.4;
+  }
+  .tab.drag-over {
+    outline: 2px solid var(--text-normal);
+    outline-offset: 1px;
   }
 
   .tab-label {

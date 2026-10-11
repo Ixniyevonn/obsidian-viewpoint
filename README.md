@@ -114,6 +114,7 @@ Keyboard shortcuts below use Ctrl. The editor also accepts Cmd for selection, co
 | Add a dimension | Click **+** in the tab bar above the canvas. |
 | Edit a dimension | Click the pencil button in the active tab, or right-click any tab and choose **Edit dimension**. |
 | Switch dimensions | Click a dimension tab, or scroll without Ctrl. |
+| Reorder dimensions | Drag a dimension tab onto another tab to swap them. |
 | Select the next or previous dimension | Use Tab or Ctrl+Tab. |
 | Hide ungrouped notes | Click the eye button in the toolbar below the tabs. |
 | Filter notes by tag | Click a tag in the tag menu at the top right. Click it again to remove that filter. |
