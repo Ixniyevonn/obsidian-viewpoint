@@ -1,19 +1,22 @@
 meta:
   name: The Shattered Kingdoms
   created: '2025-01-15T10:30:00Z'
-  modified: '2026-09-14T20:00:00Z'
+  modified: '2026-10-11T00:00:00Z'
 dimensions:
   narrative:
     name: Narrative Role
     groups:
       - id: protagonists
         name: Protagonists
+        color: blue
         cells: []
       - id: antagonists
         name: Antagonists
+        color: red
         cells: []
       - id: supporting
         name: Supporting Cast
+        color: green-soft
         cells: []
   political:
     name: Political Alignment
@@ -44,16 +47,30 @@ dimensions:
             y: militant
           - x: neutral
             y: militant
+      - id: royal-court
+        name: Royal Court
+        color: purple
+        cells:
+          - x: crown
+            y: diplomatic
+          - x: crown
+            y: pragmatic
       - id: merchant-guild
         name: Merchant Guild
         cells:
           - x: neutral
-            y: diplomatic
-      - id: royal-court
-        name: Royal Court
-        cells:
-          - x: crown
             y: pragmatic
+      - id: wildcards
+        name: Wildcards
+        color: '#8b5cf6'
+        cells:
+          - x: rebel
+            y: diplomatic
+          - x: loyalist
+            y: diplomatic
+        boxOrder:
+          '2,0': 0
+          '0,0': 1
       - id: inquisition
         name: The Inquisition
         cells:
@@ -74,6 +91,7 @@ dimensions:
     groups:
       - id: innate-users
         name: Born Gifted
+        color: orange
         cells:
           - x: innate
             y: null
@@ -84,14 +102,44 @@ dimensions:
             y: null
       - id: clerics
         name: Divine Servants
+        color: purple
         cells:
           - x: granted
             y: null
       - id: artificers
         name: Artificers
+        color: '#0ea5e9'
         cells:
           - x: artifact
             y: null
+  influence:
+    name: Sphere of Influence
+    y-spectrum:
+      name: Reach
+      poles:
+        - Local
+        - Global
+      stops:
+        - local
+        - regional
+        - global
+    groups:
+      - id: court
+        name: Royal Court
+        color: blue-soft
+        cells:
+          - x: null
+            y: global
+      - id: rebellion
+        name: Northern Rebellion
+        cells:
+          - x: null
+            y: regional
+      - id: village
+        name: Millhaven
+        cells:
+          - x: null
+            y: local
 notes:
   kira:
     title: Kira Thornwood
@@ -99,16 +147,18 @@ notes:
     long: |
       # Kira Thornwood
 
-      **Age:** 24  
+      **Age:** 24
       **Role:** Protagonist, reluctant hero
 
       ## Background
-      Former blacksmith's apprentice from the Northern village of Millhaven. 
-      Discovered her innate fire magic when raiders attacked her village.
+
+      Former blacksmith's apprentice from the Northern village of Millhaven.
+      She discovered her innate fire magic when raiders attacked her home.
 
       ## Arc
-      Learning to control her powers while navigating the political 
-      minefield between rebels and crown.
+
+      She learns to control her powers while she moves between the rebels and
+      the crown. Her choice decides whether the kingdom survives its fracture.
     tags:
       - '[[Demo Notes#Fire magic|Fire magic]]'
       - Protagonist
@@ -116,6 +166,7 @@ notes:
       narrative: protagonists
       political: northern-rebels
       magic: innate-users
+      influence: village
     placement:
       political:
         x: rebel
@@ -125,27 +176,30 @@ notes:
           label: hunted by
         - to: elena
           label: trained by
+        - to: elena
+          label: trusts
       magic:
         - to: temple-amulet
           label: seeks
     width: 260
   valdric:
     title: Lord Valdric
-    short: Grand Inquisitor hunting magic users. See [[Demo Notes]].
+    short: Grand Inquisitor hunting magic users. See [[Demo Notes]] for the setting.
     long: |
       # Lord Valdric Ashmore
 
-      **Age:** 52  
+      **Age:** 52
       **Role:** Primary Antagonist
 
-      Grand Inquisitor of the Crown. Believes magic users are 
-      abominations that must be controlled or eliminated.
+      Grand Inquisitor of the Crown. He believes that magic users are
+      abominations that must be controlled or removed.
     tags:
       - Antagonist
     membership:
       narrative: antagonists
       political: inquisition
-      magic: null
+      magic: clerics
+      influence: court
     connections:
       narrative:
         - to: marcus
@@ -153,6 +207,11 @@ notes:
       political:
         - to: elena
           label: suspects
+        - to: marcus
+          label: watches
+      influence:
+        - to: marcus
+          label: commands
   elena:
     title: Elena Brightwater
     short: Court mage secretly aiding the rebellion and mentoring Kira. Her lessons focus on restraint, trust, and [[Demo Notes#Fire magic|controlling fire magic]] before either side can turn Kira into a weapon.
@@ -160,7 +219,15 @@ notes:
       # Elena Brightwater
 
       Court mage who secretly sympathizes with the rebellion.
-      Teaches Kira to control her abilities.
+      She teaches Kira to control her abilities.
+
+      > "Power answers the hand that holds it steady."
+
+      ## Duties
+
+      - Advise the Royal Court.
+      - Protect Kira from the Inquisition.
+      - Keep her own loyalty hidden.
     tags:
       - '[[Demo Notes#Fire magic|Fire magic]]'
       - Mentor
@@ -168,6 +235,10 @@ notes:
       narrative: supporting
       political: royal-court
       magic: scholars
+      influence: court
+    placement:
+      political:
+        y: pragmatic
     connections:
       narrative:
         - to: valdric
@@ -178,18 +249,30 @@ notes:
       magic:
         - to: kira
           label: teaches
+      influence:
+        - to: kira
+          label: advises
   marcus:
     title: Marcus the Red
     short: A pragmatic rebel commander who sees Kira's power as the key to victory. He must balance the urgency of the uprising against the safety of villages caught between both armies. His plans put increasing pressure on Elena's secret work at court, while Kira questions whether winning at any cost will leave a kingdom worth saving. Read [the rebellion](Demo%20Notes.md#The%20rebellion) for background.
     long: |
       # Marcus the Red
 
-      Leader of the Northern Rebellion. Pragmatic commander 
-      who sees Kira's power as key to victory.
+      Leader of the Northern Rebellion. A pragmatic commander who sees Kira's
+      power as the key to victory.
+
+      ## Plans
+
+      - Unite the northern houses.
+      - Take the Ember Heart before the Crown does.
+      - Keep the villages out of the crossfire.
+    tags:
+      - Rebel
     membership:
       narrative: supporting
       political: northern-rebels
       magic: null
+      influence: rebellion
     placement:
       political:
         x: neutral
@@ -200,35 +283,63 @@ notes:
       political:
         - to: valdric
           label: null
+      influence:
+        - to: kira
+          label: protects
+    width: 600
   temple-amulet:
     title: The Ember Heart
-    short: Ancient artifact that massively amplifies fire magic; sought by both factions.
+    short: Ancient artifact that massively amplifies fire magic; sought by both factions. See [[Demo Notes#The Ember Heart|the amulet lore]].
     long: |
       # The Ember Heart
 
       Ancient artifact said to amplify fire magic tenfold.
       Both sides race to find it.
+    tags:
+      - '[[Demo Notes#The Ember Heart]]'
     membership:
       narrative: null
       political: null
       magic: artificers
+      influence: null
     connections:
       magic:
         - to: firestone
           label: amplifies
   firestone:
     title: Firestone Magic
-    short: Emotion-driven fire magic system where passion must be balanced against self-destruction.
+    short: Emotion-driven fire magic where passion must be balanced against self-destruction. Read [the notes](Demo%20Notes.md) for details.
     long: |
-      # Firestone Magic System
+      # Firestone Magic
 
-      Magic flows from emotional intensity. Fire users must 
-      balance passion with control or risk self-immolation.
+      Magic flows from emotional intensity. Fire users must balance passion
+      with control, or they risk self-immolation.
+    tags:
+      - Magic
     membership:
       narrative: null
       political: null
       magic: innate-users
-    connections: {}
+      influence: null
+    connections:
+      magic:
+        - to: firestone
+          label: reinforces
+    width: 120
+  millhaven:
+    title: Millhaven
+    short: A northern village at the edge of the rebellion. See [[Demo Notes|the notes]] and [[Demo Notes#The rebellion]].
+    long: |
+      # Millhaven
+
+      A small northern village of smiths and farmers. It sits on the road
+      between the rebel camps and the Crown's patrols.
+    membership:
+      influence: village
+    connections:
+      narrative:
+        - to: kira
+          label: home of
 node_order:
   narrative:protagonists:
     - kira
@@ -249,5 +360,15 @@ node_order:
     - firestone
   magic:scholars:
     - elena
+  magic:clerics:
+    - valdric
   magic:artificers:
     - temple-amulet
+  influence:court:
+    - elena
+    - valdric
+  influence:rebellion:
+    - marcus
+  influence:village:
+    - kira
+    - millhaven

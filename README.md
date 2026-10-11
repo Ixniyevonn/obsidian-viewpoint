@@ -159,7 +159,9 @@ These limits describe the current implementation:
 
 Use [SKILL.md](SKILL.md) to create or edit `.viewpoint` files. It defines the fields, reference rules, and checks for generated files.
 
-The [example file](example.viewpoint) contains six notes across three dimensions. It includes spectra, ungrouped notes, labeled connections, all three automatic widths, and a custom width. Keep [Demo Notes.md](Demo%20Notes.md) beside it to try document links, heading links, aliases, and Markdown links. A ready-to-open copy is in `test-vault/Feature demo.viewpoint`.
+The [example file](example.viewpoint) contains seven notes across four dimensions. It shows a horizontal spectrum, a vertical spectrum, a two-axis spectrum, and a dimension with no spectra. It also shows group colors, a group span, and a detached group. It shows explicit group order, note placement, and ungrouped notes. It shows tags and labeled connections, including a duplicate pair, a bidirectional pair, and a self-connection. It uses both automatic and custom node widths.
+
+Keep [Demo Notes.md](Demo%20Notes.md) beside it to try document links, heading links, aliases, and Markdown links. A ready-to-open copy is in `test-vault/Feature demo.viewpoint`.
 
 Node positions, viewport settings, selections, and undo history are not part of the file format.
 

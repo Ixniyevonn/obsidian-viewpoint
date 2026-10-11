@@ -7,7 +7,7 @@ description: Create and edit .viewpoint YAML files for Obsidian Viewpoint. Use t
 
 Create `.viewpoint` files that the Obsidian Viewpoint plugin can open and edit. Use this skill for new projects and changes to existing projects.
 
-Read [example.viewpoint](example.viewpoint) when you need a populated example. It shows three dimensions, six notes, spectra, connections, a group span, node placement, group order, and a custom node width.
+Read [example.viewpoint](example.viewpoint) when you need a populated example. It shows four dimensions and seven notes. It also shows spectra on both axes, group colors, and connections. It covers a group span, node placement, group order, tags, and node widths.
 
 ## Create a project
 
