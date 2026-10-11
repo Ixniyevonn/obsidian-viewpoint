@@ -1,5 +1,6 @@
 import type {
 	ClipboardNote,
+	Dimension,
 	GroupCell,
 	Note,
 	ProjectData,
@@ -484,6 +485,89 @@ export function createProjectStore() {
 			if (xSpectrum) dim["x-spectrum"] = xSpectrum;
 			if (ySpectrum) dim["y-spectrum"] = ySpectrum;
 			project.dimensions[id] = dim;
+			touch();
+			notify();
+			return project;
+		},
+
+		/**
+		 * Copy a dimension into a new dimension.
+		 *
+		 * The copy gets the same groups, spectra, note membership, note
+		 * placement, connections, and node order. The copy name gets the suffix
+		 * " copy". The function adds a number when that name is in use.
+		 *
+		 * @param id - The ID of the dimension to copy.
+		 * @param newId - The ID of the new dimension. The caller selects it.
+		 * @returns The project data.
+		 */
+		duplicateDimension(id: string, newId: string) {
+			snap();
+			const source = project.dimensions[id];
+			if (!source) return project;
+
+			const otherNames = new Set(
+				Object.entries(project.dimensions)
+					.filter(([otherId]) => otherId !== id)
+					.map(([, other]) => other.name.trim().toLowerCase()),
+			);
+			let copyName = `${source.name} copy`;
+			let suffix = 2;
+			while (otherNames.has(copyName.trim().toLowerCase())) {
+				copyName = `${source.name} copy ${suffix}`;
+				suffix += 1;
+			}
+
+			const xSpectrum = source["x-spectrum"];
+			const ySpectrum = source["y-spectrum"];
+			const copy: Dimension = {
+				name: copyName,
+				groups: source.groups.map((group) => ({
+					...group,
+					cells: group.cells.map((cell) => ({ ...cell })),
+					boxOrder: group.boxOrder ? { ...group.boxOrder } : undefined,
+				})),
+			};
+			if (xSpectrum) {
+				copy["x-spectrum"] = {
+					name: xSpectrum.name,
+					poles: [xSpectrum.poles[0], xSpectrum.poles[1]],
+					stops: [...xSpectrum.stops],
+				};
+			}
+			if (ySpectrum) {
+				copy["y-spectrum"] = {
+					name: ySpectrum.name,
+					poles: [ySpectrum.poles[0], ySpectrum.poles[1]],
+					stops: [...ySpectrum.stops],
+				};
+			}
+			project.dimensions[newId] = copy;
+
+			for (const note of Object.values(project.notes)) {
+				if (id in note.membership) {
+					note.membership[newId] = note.membership[id];
+				}
+				const placement = note.placement?.[id];
+				if (placement) {
+					if (!note.placement) note.placement = {};
+					note.placement[newId] = { ...placement };
+				}
+				const connections = note.connections?.[id];
+				if (connections) {
+					note.connections[newId] = connections.map((connection) => ({
+						...connection,
+					}));
+				}
+			}
+
+			for (const key of Object.keys(project.node_order)) {
+				if (!key.startsWith(`${id}:`)) continue;
+				project.node_order[`${newId}${key.slice(id.length)}`] = [
+					...project.node_order[key],
+				];
+			}
+
 			touch();
 			notify();
 			return project;

@@ -11,9 +11,12 @@
       ySpectrum: Spectrum | null,
     ) => void;
     onCancel: () => void;
+    onDuplicate: () => void;
+    onDelete: () => void;
   }
 
-  const { existing, onConfirm, onCancel }: Props = $props();
+  const { existing, onConfirm, onCancel, onDuplicate, onDelete }: Props =
+    $props();
 
   let nameInputEl = $state<HTMLInputElement | undefined>(undefined);
 
@@ -40,6 +43,7 @@
   let dragOverIdx = $state(-1);
 
   let showDiscardConfirm = $state(false);
+  let showDeleteConfirm = $state(false);
 
   function formSnapshot(): string {
     return JSON.stringify({
@@ -79,6 +83,19 @@
     onCancel();
   }
 
+  function requestDelete() {
+    showDeleteConfirm = true;
+  }
+
+  function cancelDelete() {
+    showDeleteConfirm = false;
+  }
+
+  function confirmDelete() {
+    showDeleteConfirm = false;
+    onDelete();
+  }
+
   function buildSpectrum(
     enabled: boolean,
     sName: string,
@@ -113,12 +130,13 @@
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === "Escape") {
       e.stopPropagation();
-      if (showDiscardConfirm) keepEditing();
+      if (showDeleteConfirm) cancelDelete();
+      else if (showDiscardConfirm) keepEditing();
       else requestClose();
       return;
     }
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-      if (showDiscardConfirm) return;
+      if (showDiscardConfirm || showDeleteConfirm) return;
       e.preventDefault();
       handleConfirm();
     }
@@ -188,7 +206,25 @@
     class="dialog"
     onclick={(e) => e.stopPropagation()}
   >
-    <h2>{existing ? "Edit Dimension" : "New Dimension"}</h2>
+    <div class="dialog-header">
+      <h2>{existing ? "Edit Dimension" : "New Dimension"}</h2>
+      {#if existing}
+        <div class="dialog-header-actions">
+          <button
+            type="button"
+            class="header-btn"
+            onclick={onDuplicate}
+            title="Duplicate dimension">Duplicate</button
+          >
+          <button
+            type="button"
+            class="header-btn danger"
+            onclick={requestDelete}
+            title="Delete dimension">Delete</button
+          >
+        </div>
+      {/if}
+    </div>
 
     <label class="field">
       <span class="field-label">Name</span>
@@ -412,6 +448,39 @@
       </div>
     </div>
   {/if}
+
+  {#if showDeleteConfirm}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="confirm-backdrop"
+      onclick={(e) => {
+        e.stopPropagation();
+        cancelDelete();
+      }}
+    >
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="confirm-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-title"
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={handleKeydown}
+      >
+        <p id="delete-title" class="confirm-message">
+          Delete this dimension and its groups? The notes stay.
+        </p>
+        <div class="dialog-actions">
+          <button type="button" class="btn-cancel" onclick={cancelDelete}>
+            Cancel
+          </button>
+          <button type="button" class="btn-danger" onclick={confirmDelete}>
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -437,9 +506,43 @@
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
   }
 
-  .dialog h2 {
-    margin: 0 0 16px;
+  .dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .dialog-header h2 {
+    margin: 0;
     font-size: 1.2em;
+  }
+
+  .dialog-header-actions {
+    display: flex;
+    gap: 6px;
+  }
+
+  .header-btn {
+    padding: 4px 10px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
+    background: var(--background-secondary);
+    color: var(--text-muted);
+    font-size: var(--font-ui-small);
+    cursor: pointer;
+  }
+  .header-btn:hover {
+    color: var(--text-normal);
+  }
+  .header-btn.danger {
+    color: var(--text-error);
+    border-color: var(--text-error);
+  }
+  .header-btn.danger:hover {
+    background: var(--color-red);
+    color: var(--text-on-accent);
   }
 
   .field {

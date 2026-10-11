@@ -8,9 +8,10 @@
     project: ProjectStore;
     ui: UiStore;
     onOpenDialog: (mode: "create" | "edit") => void;
+    onDimensionContextMenu: (id: string, e: MouseEvent) => void;
   }
 
-  const { project, ui, onOpenDialog }: Props = $props();
+  const { project, ui, onOpenDialog, onDimensionContextMenu }: Props = $props();
 
   const MAX_VISIBLE_DIMS = 10;
 
@@ -36,6 +37,7 @@
       class="axis-pill"
       class:active={isActive}
       onclick={() => (ui.activeDimensionId = id)}
+      oncontextmenu={(e) => onDimensionContextMenu(id, e)}
     >
       {dims[id].name}
       {#if dims[id]["x-spectrum"] || dims[id]["y-spectrum"]}

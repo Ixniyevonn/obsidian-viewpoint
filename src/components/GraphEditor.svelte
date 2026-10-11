@@ -96,6 +96,9 @@
 
   let dialogMode = $state<"create" | "edit" | null>(null);
 
+  /** The dimension ID that waits for a delete confirmation, or null. */
+  let dimensionDeletePendingId = $state<string | null>(null);
+
   // --- Measured DOM heights for accurate layout ---
   let measuredHeights = $state<Record<string, number>>({});
   const pendingHeights = new Map<string, number>();
@@ -846,6 +849,78 @@
     dialogMode = null;
   }
 
+  /**
+   * Copy a dimension and open the copy for edit.
+   *
+   * @param id - The ID of the dimension to copy.
+   */
+  function duplicateDimensionById(id: string) {
+    if (!project.project.dimensions[id]) return;
+    const newId = generateId("dim");
+    project.duplicateDimension(id, newId);
+    ui.activeDimensionId = newId;
+    dialogMode = null;
+  }
+
+  /** Copy the active dimension and open the copy for edit. */
+  function handleDialogDuplicate() {
+    if (ui.activeDimensionId) duplicateDimensionById(ui.activeDimensionId);
+  }
+
+  /** Remove the active dimension. */
+  function handleDialogDelete() {
+    const dimId = ui.activeDimensionId;
+    if (!dimId) return;
+    project.removeDimension(dimId);
+    dialogMode = null;
+  }
+
+  /**
+   * Open the context menu for a dimension pill.
+   *
+   * @param id - The dimension ID under the pointer.
+   * @param e - The context menu event.
+   */
+  function handleDimensionContextMenu(id: string, e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const menu = new Menu();
+    menu.addItem((item) =>
+      item
+        .setTitle("Duplicate dimension")
+        .setIcon("copy")
+        .onClick(() => duplicateDimensionById(id)),
+    );
+    menu.addItem((item) =>
+      item
+        .setTitle("Delete dimension")
+        .setIcon("trash")
+        .onClick(() => {
+          dimensionDeletePendingId = id;
+        }),
+    );
+    menu.showAtMouseEvent(e);
+  }
+
+  function cancelDimensionDelete() {
+    dimensionDeletePendingId = null;
+  }
+
+  /** Remove the dimension that waits for confirmation. */
+  function confirmDimensionDelete() {
+    const id = dimensionDeletePendingId;
+    dimensionDeletePendingId = null;
+    if (!id) return;
+    project.removeDimension(id);
+    if (ui.activeDimensionId === id) dialogMode = null;
+  }
+
+  const dimensionDeletePendingName = $derived(
+    dimensionDeletePendingId
+      ? (project.project.dimensions[dimensionDeletePendingId]?.name ?? "")
+      : "",
+  );
+
   const dialogExisting: Dimension | null = $derived(
     dialogMode === "edit" && ui.activeDimensionId
       ? (project.project.dimensions[ui.activeDimensionId] ?? null)
@@ -934,6 +1009,10 @@
     }
 
     if (e.key === "Escape") {
+      if (dimensionDeletePendingId) {
+        cancelDimensionDelete();
+        return;
+      }
       if (draggingGroupId) {
         draggingGroupId = null;
         groupDragTracking = false;
@@ -1340,7 +1419,12 @@
   onwheel={onWheel}
 >
   <div class="canvas-area" bind:this={canvasAreaEl}>
-    <AxisSwitcher {project} {ui} onOpenDialog={handleOpenDialog} />
+    <AxisSwitcher
+      {project}
+      {ui}
+      onOpenDialog={handleOpenDialog}
+      onDimensionContextMenu={handleDimensionContextMenu}
+    />
 
     {#if ui.connectingFromId}
       <div class="connection-hint">
@@ -1481,6 +1565,8 @@
     existing={dialogExisting}
     onConfirm={handleDialogConfirm}
     onCancel={handleDialogCancel}
+    onDuplicate={handleDialogDuplicate}
+    onDelete={handleDialogDelete}
   />
 {/if}
 
@@ -1500,6 +1586,38 @@
     }}
     onClose={() => (colorPopover = null)}
   />
+{/if}
+
+{#if dimensionDeletePendingId}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="confirm-backdrop"
+    onclick={(e) => {
+      e.stopPropagation();
+      cancelDimensionDelete();
+    }}
+  >
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="confirm-dialog"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="dimension-delete-title"
+      onclick={(e) => e.stopPropagation()}
+    >
+      <p id="dimension-delete-title" class="confirm-message">
+        Delete “{dimensionDeletePendingName}” and its groups? The notes stay.
+      </p>
+      <div class="confirm-actions">
+        <button type="button" class="btn-cancel" onclick={cancelDimensionDelete}>
+          Cancel
+        </button>
+        <button type="button" class="btn-danger" onclick={confirmDimensionDelete}>
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
 {/if}
 
 <style>
@@ -1563,5 +1681,62 @@
     stroke-width: 1;
     stroke-dasharray: 6 4;
     opacity: 0.5;
+  }
+
+  .confirm-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  .confirm-dialog {
+    width: 320px;
+    max-width: 84vw;
+    padding: 20px;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-m);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  }
+
+  .confirm-message {
+    margin: 0 0 16px;
+    font-size: var(--font-ui-small);
+    color: var(--text-normal);
+  }
+
+  .confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .btn-cancel,
+  .btn-danger {
+    padding: 6px 16px;
+    border-radius: var(--radius-s);
+    font-size: var(--font-ui-small);
+    cursor: pointer;
+    border: 1px solid var(--background-modifier-border);
+  }
+  .btn-cancel {
+    background: var(--background-secondary);
+    color: var(--text-muted);
+  }
+  .btn-cancel:hover {
+    color: var(--text-normal);
+  }
+  .btn-danger {
+    background: var(--color-red);
+    color: var(--text-on-accent);
+    border-color: var(--color-red);
+    font-weight: 600;
+  }
+  .btn-danger:hover {
+    filter: brightness(1.1);
   }
 </style>
